@@ -18,15 +18,27 @@ export interface Lbc extends Record<string, unknown> {
   joinedDate: string;
 }
 
-export interface LbcListResponse {
-  data: Lbc[];
+export interface LbcListMeta {
+  total: number;
+  page: number;
+  per_page: number;
+  last_page: number;
+}
+
+export interface LbcListSummary {
   total: number;
   active: number;
   pending: number;
   suspended: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+  inactive: number;
+}
+
+export interface LbcListResponse {
+  success: boolean;
+  data: Lbc[];
+  meta: LbcListMeta;
+  summary: LbcListSummary;
+  status_code: number;
 }
 
 export interface LbcQueryParams {
@@ -53,4 +65,11 @@ export interface BulkSuspendResult {
   succeeded: string[];
   skipped: string[];
   failed: string[];
+}
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message: string;
+  status_code: number;
 }

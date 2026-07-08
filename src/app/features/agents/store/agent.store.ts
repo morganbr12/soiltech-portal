@@ -2,60 +2,58 @@ import { signalStore, withState, withMethods, withComputed, patchState } from '@
 import { inject, computed } from '@angular/core';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap, catchError, finalize, timeout, EMPTY } from 'rxjs';
-import { LbcService } from '../services/lbc.service';
-import { Lbc, LbcListResponse, LbcQueryParams, CreateLbcRequest } from '../domain/lbc.model';
+import { AgentService } from '../services/agent.service';
+import { Agent, AgentListResponse, AgentQueryParams, CreateAgentRequest } from '../domain/agent.model';
 
 type StoreCallbacks = { onSuccess: () => void; onError: (msg: string) => void };
 type HttpErr = { error?: { message?: string }; message?: string };
-import { EntityStatus } from '../../../core/enums/status.enum';
 
-interface LbcState {
-  lbcs: Lbc[];
+interface AgentState {
+  agents: Agent[];
   total: number;
   totalActive: number;
-  totalPending: number;
+  totalInactive: number;
   totalSuspended: number;
   isLoading: boolean;
   error: string | null;
   selectedIds: string[];
 }
 
-export const LbcStore = signalStore(
+export const AgentStore = signalStore(
   { providedIn: 'root' },
-  withState<LbcState>({
-    lbcs: [],
+  withState<AgentState>({
+    agents: [],
     total: 0,
     totalActive: 0,
-    totalPending: 0,
+    totalInactive: 0,
     totalSuspended: 0,
     isLoading: false,
     error: null,
     selectedIds: [],
   }),
   withComputed((store) => ({
-    totalInactive: computed(() => store.total() - store.totalActive() - store.totalPending() - store.totalSuspended()),
-    regions: computed(() => [...new Set(store.lbcs().map(l => l.region))].sort()),
+    regions: computed(() => [...new Set(store.agents().map(a => a.region))].sort()),
   })),
-  withMethods((store, service = inject(LbcService)) => ({
-    load: rxMethod<LbcQueryParams>(
+  withMethods((store, service = inject(AgentService)) => ({
+    load: rxMethod<AgentQueryParams>(
       pipe(
         tap(() => patchState(store, { isLoading: true, error: null })),
         switchMap(params =>
           service.list(params).pipe(
             timeout(20000),
-            tap((res: LbcListResponse) => {
+            tap((res: AgentListResponse) => {
               patchState(store, {
-                lbcs: res.data ?? [],
+                agents: res.data ?? [],
                 total: res.summary?.total ?? res.data?.length ?? 0,
                 totalActive: res.summary?.active ?? 0,
-                totalPending: res.summary?.pending ?? 0,
+                totalInactive: res.summary?.inactive ?? 0,
                 totalSuspended: res.summary?.suspended ?? 0,
               });
             }),
             catchError((err: { message?: string }) => {
               const msg = (err as { error?: { message?: string } })?.error?.message
                 ?? err?.message
-                ?? 'Failed to load LBCs';
+                ?? 'Failed to load agents';
               patchState(store, { error: msg });
               return EMPTY;
             }),
@@ -65,44 +63,11 @@ export const LbcStore = signalStore(
       )
     ),
 
-    suspendOne(id: string): void {
-      service.suspend(id).subscribe({
-        next: updated => patchState(store, {
-          lbcs: store.lbcs().map(l => l.id === id ? updated : l),
-          totalActive: store.totalActive() - 1,
-          totalSuspended: store.totalSuspended() + 1,
-        }),
-      });
-    },
-
-    bulkSuspend(ids: string[]): void {
-      service.bulkSuspend(ids).subscribe({
-        next: result => {
-          const succeeded = new Set(result.succeeded);
-          patchState(store, {
-            lbcs: store.lbcs().map(l => succeeded.has(l.id) ? { ...l, status: EntityStatus.SUSPENDED } : l),
-            selectedIds: [],
-          });
-        },
-      });
-    },
-
-    exportCsv(params: { status?: string; region?: string; ids?: string[] } = {}): void {
-      service.export(params).subscribe(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'lbcs.csv';
-        a.click();
-        URL.revokeObjectURL(url);
-      });
-    },
-
     setSelectedIds(ids: string[]): void {
       patchState(store, { selectedIds: ids });
     },
 
-    create(payload: CreateLbcRequest, callbacks: StoreCallbacks): void {
+    create(payload: CreateAgentRequest, callbacks: StoreCallbacks): void {
       service.create(payload).subscribe({
         next: () => callbacks.onSuccess(),
         error: (err: HttpErr) => callbacks.onError(
@@ -111,11 +76,11 @@ export const LbcStore = signalStore(
       });
     },
 
-    updateOne(id: string, payload: Partial<CreateLbcRequest>, callbacks: StoreCallbacks): void {
+    updateOne(id: string, payload: Partial<CreateAgentRequest>, callbacks: StoreCallbacks): void {
       service.update(id, payload).subscribe({
         next: updated => {
           patchState(store, {
-            lbcs: store.lbcs().map(l => l.id === id ? { ...l, ...updated } : l),
+            agents: store.agents().map(a => a.id === id ? { ...a, ...updated } : a),
           });
           callbacks.onSuccess();
         },
@@ -128,12 +93,12 @@ export const LbcStore = signalStore(
     deleteOne(id: string, callbacks: StoreCallbacks): void {
       service.delete(id).subscribe({
         next: () => {
-          const removed = store.lbcs().find(l => l.id === id);
+          const removed = store.agents().find(a => a.id === id);
           patchState(store, {
-            lbcs: store.lbcs().filter(l => l.id !== id),
+            agents: store.agents().filter(a => a.id !== id),
             total: Math.max(0, store.total() - 1),
             totalActive: removed?.status === 'active' ? Math.max(0, store.totalActive() - 1) : store.totalActive(),
-            totalPending: removed?.status === 'pending' ? Math.max(0, store.totalPending() - 1) : store.totalPending(),
+            totalInactive: removed?.status === 'inactive' ? Math.max(0, store.totalInactive() - 1) : store.totalInactive(),
             totalSuspended: removed?.status === 'suspended' ? Math.max(0, store.totalSuspended() - 1) : store.totalSuspended(),
           });
           callbacks.onSuccess();

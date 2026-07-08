@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, signal, computed } from '@angular/core';
+import { Component, Input, Output, EventEmitter, HostListener, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -83,7 +83,7 @@ export interface TableAction<T = Record<string, unknown>> {
                 </th>
               }
               @if (_actions.length) {
-                <th class="th-actions">Actions</th>
+                <th class="th-actions"></th>
               }
             </tr>
           </thead>
@@ -95,7 +95,7 @@ export interface TableAction<T = Record<string, unknown>> {
                   @for (col of _columns; track col.key) {
                     <td><div class="skeleton" style="width:60%;height:16px"></div></td>
                   }
-                  @if (_actions.length) { <td><div class="skeleton" style="width:80px;height:28px"></div></td> }
+                  @if (_actions.length) { <td><div class="skeleton" style="width:32px;height:32px;border-radius:8px;margin:0 auto"></div></td> }
                 </tr>
               }
             } @else if (pagedData().length === 0) {
@@ -148,18 +148,24 @@ export interface TableAction<T = Record<string, unknown>> {
                   }
                   @if (_actions.length) {
                     <td class="td-actions" (click)="$event.stopPropagation()">
-                      <div class="action-btns">
-                        @for (action of _actions; track action.label) {
-                          @if (!action.condition || action.condition(row)) {
-                            <button
-                              class="action-btn"
-                              [title]="action.label"
-                              [style.color]="action.color ?? 'var(--color-text-secondary)'"
-                              (click)="action.handler(row)"
-                            >
-                              <span class="material-symbols-rounded">{{ action.icon }}</span>
-                            </button>
-                          }
+                      <div class="menu-wrapper">
+                        <button class="menu-trigger" [class.active]="openMenuKey() === getRowKey(row)" (click)="toggleMenu(getRowKey(row), $event)" title="Actions">
+                          <span class="dots"><span></span><span></span><span></span></span>
+                        </button>
+                        @if (openMenuKey() === getRowKey(row)) {
+                          <div class="action-dropdown">
+                            @for (action of _actions; track action.label; let last = $last) {
+                              @if (!action.condition || action.condition(row)) {
+                                @if (action.color) {
+                                  <div class="dropdown-divider"></div>
+                                }
+                                <button class="dropdown-item" [class.dropdown-item--danger]="!!action.color" (click)="runAction(action, row)">
+                                  <span class="material-symbols-rounded">{{ action.icon }}</span>
+                                  {{ action.label }}
+                                </button>
+                              }
+                            }
+                          </div>
                         }
                       </div>
                     </td>
@@ -200,7 +206,7 @@ export interface TableAction<T = Record<string, unknown>> {
     </div>
   `,
   styles: [`
-    .data-table-wrapper { background: var(--color-surface); border-radius: var(--radius-lg); border: 1px solid var(--color-border-light); overflow: hidden; }
+    .data-table-wrapper { background: var(--color-surface); border-radius: var(--radius-lg); border: 1px solid var(--color-border-light); overflow: visible; position: relative; }
     .table-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--color-border-light); gap: 12px; flex-wrap: wrap; }
     .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 10px; }
     .table-search {
@@ -230,7 +236,7 @@ export interface TableAction<T = Record<string, unknown>> {
     }
     .sort-icon { font-size: 14px; vertical-align: middle; margin-left: 4px; }
     .th-check, .td-check { width: 40px; }
-    .th-actions, .td-actions { width: 120px; }
+    .th-actions, .td-actions { width: 52px; text-align: center; }
     .text-right { text-align: right; }
     .currency-cell { font-weight: 600; color: var(--color-primary); }
     .date-cell { color: var(--color-text-secondary); white-space: nowrap; }
@@ -241,12 +247,52 @@ export interface TableAction<T = Record<string, unknown>> {
       color: white; font-size: 0.75rem; font-weight: 700;
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
-    .action-btns { display: flex; gap: 4px; }
-    .action-btn {
-      width: 30px; height: 30px; border-radius: 6px; border: none; background: transparent;
-      cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background var(--transition-fast);
-      span { font-size: 18px; }
+    .menu-wrapper { position: relative; display: inline-flex; justify-content: center; }
+    .menu-trigger {
+      width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background var(--transition-fast);
+      &:hover, &.active { background: var(--color-border-light); }
+    }
+    .dots {
+      display: flex; flex-direction: column; align-items: center; gap: 3.5px; pointer-events: none;
+      span {
+        display: block; width: 4px; height: 4px; border-radius: 50%;
+        background: var(--color-text-muted); transition: background var(--transition-fast);
+      }
+    }
+    .menu-trigger:hover .dots span,
+    .menu-trigger.active .dots span { background: var(--color-text-primary); }
+    .action-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      min-width: 168px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-xl);
+      z-index: 200;
+      overflow: hidden;
+      animation: dropdown-in 120ms cubic-bezier(0.16, 1, 0.3, 1);
+      padding: 4px;
+    }
+    @keyframes dropdown-in {
+      from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .dropdown-divider { height: 1px; background: var(--color-border-light); margin: 4px 0; }
+    .dropdown-item {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 9px 12px;
+      border: none; background: transparent; cursor: pointer;
+      font-size: 0.875rem; font-family: inherit; font-weight: 500;
+      color: var(--color-text-primary);
+      text-align: left; border-radius: 8px;
+      transition: background var(--transition-fast);
+      span { font-size: 17px; font-variation-settings: 'FILL' 0; flex-shrink: 0; color: var(--color-text-muted); }
       &:hover { background: var(--color-surface-2); }
+      &--danger { color: var(--color-error); span { color: var(--color-error); } &:hover { background: rgba(220,38,38,0.06); } }
     }
     .empty-row td { padding: 48px; }
     .empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--color-text-muted); }
@@ -300,6 +346,7 @@ export class DataTableComponent<T extends Record<string, unknown>> {
   readonly sortDir = signal<'asc' | 'desc'>('asc');
   readonly currentPage = signal(1);
   readonly selectedRows = signal<T[]>([]);
+  readonly openMenuKey = signal('');
 
   readonly filteredData = computed(() => {
     let result = [...this._dataArr()];
@@ -344,6 +391,21 @@ export class DataTableComponent<T extends Record<string, unknown>> {
   );
 
   min(a: number, b: number): number { return Math.min(a, b); }
+
+  toggleMenu(key: string, e: MouseEvent): void {
+    e.stopPropagation();
+    this.openMenuKey.update(k => k === key ? '' : key);
+  }
+
+  runAction(action: TableAction<T>, row: T): void {
+    this.openMenuKey.set('');
+    action.handler(row);
+  }
+
+  @HostListener('document:click')
+  closeMenu(): void {
+    this.openMenuKey.set('');
+  }
 
   onSearch(): void { this.currentPage.set(1); }
   clearSearch(): void { this.searchQuery = ''; this.currentPage.set(1); }

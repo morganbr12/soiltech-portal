@@ -45,7 +45,7 @@ import { HeaderComponent } from './header/header.component';
 
       &__content {
         flex: 1;
-        overflow: hidden;
+        overflow: visible;
         animation: fadeIn 0.2s ease;
       }
     }

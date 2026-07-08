@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { API_ENDPOINTS } from '../../../core/constants/api.constants';
-import { Lbc, LbcListResponse, LbcQueryParams, CreateLbcRequest, BulkSuspendResult } from '../domain/lbc.model';
+import { Lbc, LbcListResponse, LbcQueryParams, CreateLbcRequest, BulkSuspendResult, ApiResponse } from '../domain/lbc.model';
 
 @Injectable({ providedIn: 'root' })
 export class LbcService {
@@ -16,27 +16,42 @@ export class LbcService {
         httpParams = httpParams.set(k, String(v));
       }
     });
-    return this.http.get<LbcListResponse>(this.base, { params: httpParams });
+    return this.http
+      .get<LbcListResponse>(this.base, { params: httpParams })
+      .pipe(map(res => ({
+        ...res,
+        data: res.data.map(lbc => ({ ...lbc, status: lbc.status.toLowerCase() as Lbc['status'] })),
+      })));
   }
 
   getById(id: string): Observable<Lbc> {
-    return this.http.get<Lbc>(`${this.base}/${id}`);
+    return this.http
+      .get<ApiResponse<Lbc>>(`${this.base}/${id}`)
+      .pipe(map(res => res.data));
   }
 
   create(payload: CreateLbcRequest): Observable<Lbc> {
-    return this.http.post<Lbc>(this.base, payload);
+    return this.http
+      .post<ApiResponse<Lbc>>(this.base, payload)
+      .pipe(map(res => res.data));
   }
 
   update(id: string, payload: Partial<CreateLbcRequest>): Observable<Lbc> {
-    return this.http.put<Lbc>(`${this.base}/${id}`, payload);
+    return this.http
+      .put<ApiResponse<Lbc>>(`${this.base}/${id}`, payload)
+      .pipe(map(res => res.data));
   }
 
   suspend(id: string): Observable<Lbc> {
-    return this.http.patch<Lbc>(`${this.base}/${id}/suspend`, {});
+    return this.http
+      .patch<ApiResponse<Lbc>>(`${this.base}/${id}/suspend`, {})
+      .pipe(map(res => res.data));
   }
 
   delete(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/${id}`);
+    return this.http
+      .delete<ApiResponse<void>>(`${this.base}/${id}`)
+      .pipe(map(() => void 0));
   }
 
   export(params: Pick<LbcQueryParams, 'status' | 'region'> & { ids?: string[] } = {}): Observable<Blob> {
@@ -48,6 +63,8 @@ export class LbcService {
   }
 
   bulkSuspend(ids: string[]): Observable<BulkSuspendResult> {
-    return this.http.patch<BulkSuspendResult>(`${this.base}/bulk-suspend`, { ids });
+    return this.http
+      .patch<ApiResponse<BulkSuspendResult>>(`${this.base}/bulk-suspend`, { ids })
+      .pipe(map(res => res.data));
   }
 }

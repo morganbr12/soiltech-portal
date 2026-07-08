@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
+import { RegisterLbcModalComponent } from '../../components/register-lbc-modal/register-lbc-modal.component';
+import { EditLbcModalComponent } from '../../components/edit-lbc-modal/edit-lbc-modal.component';
 import { LbcStore } from '../../../store/lbc.store';
 import { Lbc } from '../../../domain/lbc.model';
 import { EntityStatus } from '../../../../../core/enums/status.enum';
@@ -10,7 +12,7 @@ import { EntityStatus } from '../../../../../core/enums/status.enum';
 @Component({
   selector: 'app-lbc-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, PageHeaderComponent, DataTableComponent],
+  imports: [CommonModule, FormsModule, PageHeaderComponent, DataTableComponent, RegisterLbcModalComponent, EditLbcModalComponent],
   template: `
     <div class="page-container">
       <app-page-header
@@ -23,7 +25,7 @@ import { EntityStatus } from '../../../../../core/enums/status.enum';
         <button class="btn btn-secondary btn-sm" (click)="onExport()">
           <span class="material-symbols-rounded">download</span> Export
         </button>
-        <button class="btn btn-primary btn-sm">
+        <button class="btn btn-primary btn-sm" (click)="showRegisterModal.set(true)">
           <span class="material-symbols-rounded">add</span> Register LBC
         </button>
       </app-page-header>
@@ -61,6 +63,17 @@ import { EntityStatus } from '../../../../../core/enums/status.enum';
         </div>
       </div>
 
+      <!-- Error banner -->
+      @if (store.error() && !store.isLoading()) {
+        <div class="error-banner">
+          <span class="material-symbols-rounded">error_outline</span>
+          <span>{{ store.error() }}</span>
+          <button class="btn btn-ghost btn-sm" (click)="applyFilters()">
+            <span class="material-symbols-rounded">refresh</span> Retry
+          </button>
+        </div>
+      }
+
       <!-- Data Table -->
       <app-data-table
         [data]="store.lbcs()"
@@ -90,8 +103,67 @@ import { EntityStatus } from '../../../../../core/enums/status.enum';
         </div>
       </app-data-table>
     </div>
+
+    @if (showRegisterModal()) {
+      <app-register-lbc-modal
+        (closed)="showRegisterModal.set(false)"
+        (registered)="onRegistered()"
+      />
+    }
+
+    @if (editingLbc()) {
+      <app-edit-lbc-modal
+        [lbc]="editingLbc()!"
+        (closed)="editingLbc.set(null)"
+        (updated)="onRegistered()"
+      />
+    }
+
+    @if (deletingLbc()) {
+      <div class="confirm-backdrop" (click)="deletingLbc.set(null)">
+        <div class="confirm-dialog" (click)="$event.stopPropagation()">
+          <div class="confirm-icon">
+            <span class="material-symbols-rounded">delete_forever</span>
+          </div>
+          <h3 class="confirm-title">Delete LBC</h3>
+          <p class="confirm-msg">
+            Are you sure you want to delete <strong>{{ deletingLbc()!.name }}</strong>?
+            This action cannot be undone.
+          </p>
+          <div class="confirm-actions">
+            <button class="btn btn-ghost" (click)="deletingLbc.set(null)" [disabled]="isDeleting()">
+              Cancel
+            </button>
+            <button class="btn-danger" (click)="confirmDelete()" [disabled]="isDeleting()">
+              @if (isDeleting()) {
+                <span class="btn-spinner"></span> Deleting…
+              } @else {
+                <span class="material-symbols-rounded">delete</span> Delete
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
+    .error-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      background: rgba(220, 38, 38, 0.06);
+      border: 1px solid rgba(220, 38, 38, 0.2);
+      border-radius: var(--radius-md);
+      color: var(--color-error);
+      font-size: 0.875rem;
+      font-weight: 500;
+
+      span.material-symbols-rounded { font-size: 20px; font-variation-settings: 'FILL' 1; flex-shrink: 0; }
+      span:not(.material-symbols-rounded) { flex: 1; }
+    }
+
     .quick-stats {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -163,6 +235,63 @@ import { EntityStatus } from '../../../../../core/enums/status.enum';
 
     .filter-right { display: flex; gap: 8px; align-items: center; }
 
+    .confirm-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(3px);
+      z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 16px;
+      animation: cfade 150ms ease;
+    }
+    @keyframes cfade { from { opacity: 0; } to { opacity: 1; } }
+
+    .confirm-dialog {
+      background: var(--color-surface); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-xl); padding: 36px 32px 28px; max-width: 380px; width: 100%;
+      text-align: center; animation: cpop 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes cpop {
+      from { opacity: 0; transform: scale(0.93) translateY(8px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .confirm-icon {
+      width: 60px; height: 60px; border-radius: 50%;
+      background: rgba(220, 38, 38, 0.1);
+      display: flex; align-items: center; justify-content: center; margin: 0 auto 18px;
+      span { font-size: 30px; color: var(--color-error); font-variation-settings: 'FILL' 1; }
+    }
+
+    .confirm-title {
+      font-size: 1.125rem; font-weight: 700; color: var(--color-text-primary);
+      margin: 0 0 10px;
+    }
+
+    .confirm-msg {
+      font-size: 0.9rem; color: var(--color-text-secondary); line-height: 1.6;
+      margin: 0 0 28px;
+      strong { color: var(--color-text-primary); font-weight: 600; }
+    }
+
+    .confirm-actions {
+      display: flex; gap: 10px; justify-content: center;
+    }
+
+    .btn-danger {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 22px; border: none; border-radius: var(--radius-sm);
+      cursor: pointer; font-size: 0.9rem; font-weight: 600; font-family: inherit;
+      background: var(--color-error); color: white;
+      transition: opacity var(--transition-fast);
+      span.material-symbols-rounded { font-size: 17px; }
+      &:hover:not(:disabled) { opacity: 0.88; }
+      &:disabled { opacity: 0.55; cursor: not-allowed; }
+    }
+
+    .btn-spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.35); border-top-color: white;
+      border-radius: 50%; animation: spin 0.65s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     .filter-select {
       border: 1px solid var(--color-border);
       border-radius: 8px;
@@ -177,6 +306,10 @@ import { EntityStatus } from '../../../../../core/enums/status.enum';
 export class LbcListComponent implements OnInit {
   readonly store = inject(LbcStore);
   readonly activeStatus = signal('all');
+  readonly showRegisterModal = signal(false);
+  readonly editingLbc = signal<Lbc | null>(null);
+  readonly deletingLbc = signal<Lbc | null>(null);
+  readonly isDeleting = signal(false);
   regionFilter = '';
 
   readonly stats = computed(() => [
@@ -195,7 +328,7 @@ export class LbcListComponent implements OnInit {
 
   readonly columns: Column<Lbc>[] = [
     { key: 'id', label: 'LBC ID', width: '120px', sortable: true },
-    { key: 'name', label: 'LBC Name', sortable: true, type: 'avatar' },
+    { key: 'name', label: 'LBC Name', sortable: true },
     { key: 'region', label: 'Region', sortable: true },
     { key: 'manager', label: 'Manager' },
     { key: 'agents', label: 'Agents', type: 'number', align: 'center', sortable: true },
@@ -216,15 +349,9 @@ export class LbcListComponent implements OnInit {
   ];
 
   readonly actions: TableAction<Lbc>[] = [
-    { label: 'View', icon: 'visibility', handler: (row) => console.log('view', row.id) },
-    { label: 'Edit', icon: 'edit', handler: (row) => console.log('edit', row.id) },
-    {
-      label: 'Suspend',
-      icon: 'block',
-      color: '#dc2626',
-      condition: (row) => row.status === EntityStatus.ACTIVE,
-      handler: (row) => this.store.suspendOne(row.id),
-    },
+    { label: 'View Details', icon: 'visibility', handler: (row) => console.log('view', row.id) },
+    { label: 'Edit', icon: 'edit', handler: (row) => this.editingLbc.set(row) },
+    { label: 'Delete', icon: 'delete', color: '#dc2626', handler: (row) => this.deletingLbc.set(row) },
   ];
 
   ngOnInit(): void {
@@ -260,5 +387,27 @@ export class LbcListComponent implements OnInit {
 
   onExportSelected(): void {
     this.store.exportCsv({ ids: this.store.selectedIds() });
+  }
+
+  onRegistered(): void {
+    this.store.load({
+      status: this.activeStatus() === 'all' ? undefined : this.activeStatus(),
+      region: this.regionFilter || undefined,
+    });
+  }
+
+  confirmDelete(): void {
+    const lbc = this.deletingLbc();
+    if (!lbc) return;
+    this.isDeleting.set(true);
+    this.store.deleteOne(lbc.id, {
+      onSuccess: () => {
+        this.isDeleting.set(false);
+        this.deletingLbc.set(null);
+      },
+      onError: () => {
+        this.isDeleting.set(false);
+      },
+    });
   }
 }

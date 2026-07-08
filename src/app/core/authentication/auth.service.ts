@@ -1,13 +1,16 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap, switchMap, map, catchError, of } from 'rxjs';
+import { Observable, tap, switchMap, map } from 'rxjs';
 import { AppStore } from '../state/app.store';
 import { StorageService } from '../services/storage.service';
 import { STORAGE_KEYS } from '../constants/app.constants';
 import { API_ENDPOINTS } from '../constants/api.constants';
-import { LoginRequest, LoginResponse, AuthUser, User } from '../models/user.model';
+import { LoginRequest, LoginResponse, AdminMeResponse, AuthUser } from '../models/user.model';
 import { ROLE_PERMISSIONS } from '../permissions/role-permissions';
+import { UserRole } from '../enums/roles.enum';
+import { EntityStatus } from '../enums/status.enum';
+import { Permission } from '../enums/permissions.enum';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -18,21 +21,40 @@ export class AuthService {
 
   login(req: LoginRequest): Observable<void> {
     return this.http.post<LoginResponse>(API_ENDPOINTS.AUTH.LOGIN, req).pipe(
-      tap(res => this.storeTokens(res)),
-      switchMap(loginRes => {
-        const token = this.extractToken(loginRes);
-        return this.http.get<User>(API_ENDPOINTS.AUTH.ME, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).pipe(
-          tap(profile => this.hydrateUser(loginRes, profile)),
-          catchError(() => {
-            if (loginRes.user) {
-              this.hydrateUser(loginRes, loginRes.user as User);
-            }
-            return of(null);
-          })
-        );
+      tap(res => {
+        this.storage.set(STORAGE_KEYS.AUTH_TOKEN, res.data.accessToken);
+        this.storage.set(STORAGE_KEYS.REFRESH_TOKEN, res.data.refreshToken);
       }),
+      switchMap(loginRes =>
+        this.http.get<AdminMeResponse>(API_ENDPOINTS.AUTH.ME, {
+          headers: { Authorization: `Bearer ${loginRes.data.accessToken}` },
+        }).pipe(
+          tap(meRes => {
+            const profile = meRes.data;
+            const role = (profile.role.name as UserRole) ?? UserRole.ANALYST;
+            const user: AuthUser = {
+              id: profile.id,
+              email: profile.email,
+              firstName: profile.firstName,
+              lastName: profile.lastName,
+              fullName: profile.fullName,
+              phone: profile.phone,
+              role,
+              status: (profile.status as EntityStatus) ?? EntityStatus.ACTIVE,
+              createdAt: profile.createdAt,
+              updatedAt: profile.updatedAt,
+              accessToken: loginRes.data.accessToken,
+              refreshToken: loginRes.data.refreshToken,
+              expiresAt: Date.now() + loginRes.data.expiresIn * 1000,
+              permissions: (profile.role.permissions as Permission[])
+                ?? ROLE_PERMISSIONS[role]
+                ?? [],
+            };
+            this.storage.set(STORAGE_KEYS.USER, user);
+            this.store.setUser(user);
+          })
+        )
+      ),
       map(() => void 0)
     );
   }
@@ -61,30 +83,5 @@ export class AuthService {
 
   get currentUser(): AuthUser | null {
     return this.store.user();
-  }
-
-  private extractToken(res: LoginResponse): string {
-    return res.accessToken ?? res.token ?? '';
-  }
-
-  private storeTokens(res: LoginResponse): void {
-    const token = this.extractToken(res);
-    this.storage.set(STORAGE_KEYS.AUTH_TOKEN, token);
-    if (res.refreshToken) {
-      this.storage.set(STORAGE_KEYS.REFRESH_TOKEN, res.refreshToken);
-    }
-  }
-
-  private hydrateUser(loginRes: LoginResponse, profile: User): void {
-    const token = this.extractToken(loginRes);
-    const user: AuthUser = {
-      ...profile,
-      accessToken: token,
-      refreshToken: loginRes.refreshToken ?? '',
-      expiresAt: Date.now() + (loginRes.expiresIn ?? 86400) * 1000,
-      permissions: ROLE_PERMISSIONS[profile.role],
-    };
-    this.storage.set(STORAGE_KEYS.USER, user);
-    this.store.setUser(user);
   }
 }
