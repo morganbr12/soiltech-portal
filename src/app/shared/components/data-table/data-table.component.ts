@@ -153,7 +153,9 @@ export interface TableAction<T = Record<string, unknown>> {
                           <span class="dots"><span></span><span></span><span></span></span>
                         </button>
                         @if (openMenuKey() === getRowKey(row)) {
-                          <div class="action-dropdown">
+                          <div class="action-dropdown"
+                            [style.top.px]="menuPosition().top"
+                            [style.right.px]="menuPosition().right">
                             @for (action of _actions; track action.label; let last = $last) {
                               @if (!action.condition || action.condition(row)) {
                                 @if (action.color) {
@@ -206,7 +208,7 @@ export interface TableAction<T = Record<string, unknown>> {
     </div>
   `,
   styles: [`
-    .data-table-wrapper { background: var(--color-surface); border-radius: var(--radius-lg); border: 1px solid var(--color-border-light); overflow: visible; position: relative; }
+    .data-table-wrapper { background: var(--color-surface); border-radius: var(--radius-lg); border: 1px solid var(--color-border-light); overflow: hidden; }
     .table-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--color-border-light); gap: 12px; flex-wrap: wrap; }
     .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 10px; }
     .table-search {
@@ -264,8 +266,8 @@ export interface TableAction<T = Record<string, unknown>> {
     .menu-trigger:hover .dots span,
     .menu-trigger.active .dots span { background: var(--color-text-primary); }
     .action-dropdown {
-      position: absolute;
-      top: calc(100% + 6px);
+      position: fixed;
+      top: 0;
       right: 0;
       min-width: 168px;
       background: var(--color-surface);
@@ -347,6 +349,7 @@ export class DataTableComponent<T extends Record<string, unknown>> {
   readonly currentPage = signal(1);
   readonly selectedRows = signal<T[]>([]);
   readonly openMenuKey = signal('');
+  readonly menuPosition = signal({ top: 0, right: 0 });
 
   readonly filteredData = computed(() => {
     let result = [...this._dataArr()];
@@ -394,7 +397,13 @@ export class DataTableComponent<T extends Record<string, unknown>> {
 
   toggleMenu(key: string, e: MouseEvent): void {
     e.stopPropagation();
-    this.openMenuKey.update(k => k === key ? '' : key);
+    if (this.openMenuKey() === key) {
+      this.openMenuKey.set('');
+      return;
+    }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    this.menuPosition.set({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+    this.openMenuKey.set(key);
   }
 
   runAction(action: TableAction<T>, row: T): void {

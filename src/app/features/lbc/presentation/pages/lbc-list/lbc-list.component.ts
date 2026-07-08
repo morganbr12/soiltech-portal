@@ -130,8 +130,11 @@ import { EntityStatus } from '../../../../../core/enums/status.enum';
             Are you sure you want to delete <strong>{{ deletingLbc()!.name }}</strong>?
             This action cannot be undone.
           </p>
+          @if (deleteError()) {
+            <p class="confirm-error">{{ deleteError() }}</p>
+          }
           <div class="confirm-actions">
-            <button class="btn btn-ghost" (click)="deletingLbc.set(null)" [disabled]="isDeleting()">
+            <button class="btn btn-ghost" (click)="deletingLbc.set(null); deleteError.set('')" [disabled]="isDeleting()">
               Cancel
             </button>
             <button class="btn-danger" (click)="confirmDelete()" [disabled]="isDeleting()">
@@ -266,8 +269,14 @@ import { EntityStatus } from '../../../../../core/enums/status.enum';
 
     .confirm-msg {
       font-size: 0.9rem; color: var(--color-text-secondary); line-height: 1.6;
-      margin: 0 0 28px;
+      margin: 0 0 16px;
       strong { color: var(--color-text-primary); font-weight: 600; }
+    }
+
+    .confirm-error {
+      font-size: 0.8125rem; color: var(--color-error); font-weight: 500;
+      background: rgba(220,38,38,0.08); border: 1px solid rgba(220,38,38,0.2);
+      border-radius: var(--radius-sm); padding: 8px 12px; margin: 0 0 16px; text-align: left;
     }
 
     .confirm-actions {
@@ -310,6 +319,7 @@ export class LbcListComponent implements OnInit {
   readonly editingLbc = signal<Lbc | null>(null);
   readonly deletingLbc = signal<Lbc | null>(null);
   readonly isDeleting = signal(false);
+  readonly deleteError = signal('');
   regionFilter = '';
 
   readonly stats = computed(() => [
@@ -398,15 +408,18 @@ export class LbcListComponent implements OnInit {
 
   confirmDelete(): void {
     const lbc = this.deletingLbc();
-    if (!lbc) return;
+    if (!lbc || this.isDeleting()) return;
     this.isDeleting.set(true);
+    this.deleteError.set('');
     this.store.deleteOne(lbc.id, {
       onSuccess: () => {
         this.isDeleting.set(false);
         this.deletingLbc.set(null);
+        this.deleteError.set('');
       },
-      onError: () => {
+      onError: (msg) => {
         this.isDeleting.set(false);
+        this.deleteError.set(msg);
       },
     });
   }

@@ -59,6 +59,7 @@ export interface CreateLbcRequest {
   manager: string;
   phone: string;
   email: string;
+  password: string;
 }
 
 export interface BulkSuspendResult {

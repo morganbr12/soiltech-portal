@@ -1,55 +1,60 @@
 import { EntityStatus } from '../../../core/enums/status.enum';
 
-export interface Agent extends Record<string, unknown> {
+export interface Farmer extends Record<string, unknown> {
   id: string;
+  farmerCode: string;
   firstName: string;
   lastName: string;
   fullName: string;
-  agentCode: string;
   phone: string;
-  email: string;
+  email: string | null;
+  nationalId: string;
+  agentId: string;
+  agentName: string;
   lbcId: string;
   lbcName: string;
   region: string;
   district: string;
-  farmersCount: number;
   farmsCount: number;
-  produceCollected: number;
+  totalFarmSize: number;
+  cropTypes: string[];
+  walletBalance: number;
+  totalEarnings: number;
+  kycVerified: boolean;
   status: EntityStatus;
-  lat: number | null;
-  lng: number | null;
-  lastSeen: string | null;
   joinedDate: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface AgentListMeta {
+export interface FarmerListMeta {
   total: number;
   page: number;
   per_page: number;
   last_page: number;
 }
 
-export interface AgentListSummary {
+export interface FarmerListSummary {
   total: number;
-  active: number;
-  inactive: number;
-  suspended: number;
+  approved: number;
+  pending: number;
+  rejected: number;
 }
 
-export interface AgentListResponse {
+export interface FarmerListResponse {
   success: boolean;
   statusCode: number;
   message: string | null;
-  data: Agent[];
-  meta: AgentListMeta;
-  summary: AgentListSummary;
+  data: Farmer[];
+  meta: FarmerListMeta;
+  summary: FarmerListSummary;
 }
 
-export interface AgentQueryParams {
+export interface FarmerQueryParams {
   status?: string;
   region?: string;
+  lbcId?: string;
+  agentId?: string;
   search?: string;
   page?: number;
   limit?: number;
@@ -57,16 +62,17 @@ export interface AgentQueryParams {
   sortOrder?: 'asc' | 'desc';
 }
 
-export interface CreateAgentRequest {
+export interface CreateFarmerRequest {
   firstName: string;
   lastName: string;
-  fullName: string;
   phone: string;
-  email: string;
+  email?: string;
+  nationalId: string;
+  agentId: string;
   lbcId: string;
   region: string;
   district: string;
-  password: string;
+  cropTypes: string[];
 }
 
 export interface ApiResponse<T> {
