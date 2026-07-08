@@ -1,12 +1,11 @@
-import { Component, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, computed, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
-import { MOCK_LBCS } from '../../../../../shared/data/mock-data';
+import { LbcStore } from '../../../store/lbc.store';
+import { Lbc } from '../../../domain/lbc.model';
 import { EntityStatus } from '../../../../../core/enums/status.enum';
-
-type LBC = typeof MOCK_LBCS[number];
 
 @Component({
   selector: 'app-lbc-list',
@@ -18,10 +17,10 @@ type LBC = typeof MOCK_LBCS[number];
         title="LBC Management"
         subtitle="Manage Licensed Buying Companies, regions, and performance"
         icon="business_center"
-        [badge]="lbcs().length"
+        [badge]="store.total()"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'LBC Management' }]"
       >
-        <button class="btn btn-secondary btn-sm">
+        <button class="btn btn-secondary btn-sm" (click)="onExport()">
           <span class="material-symbols-rounded">download</span> Export
         </button>
         <button class="btn btn-primary btn-sm">
@@ -31,7 +30,7 @@ type LBC = typeof MOCK_LBCS[number];
 
       <!-- Stats row -->
       <div class="quick-stats stagger-children">
-        @for (stat of stats; track stat.label) {
+        @for (stat of stats(); track stat.label) {
           <div class="quick-stat animate-slide-up">
             <div class="qs-icon" [style.background]="stat.bg">
               <span class="material-symbols-rounded" [style.color]="stat.color">{{ stat.icon }}</span>
@@ -47,7 +46,7 @@ type LBC = typeof MOCK_LBCS[number];
       <!-- Filters -->
       <div class="filter-bar">
         <div class="filter-tabs">
-          @for (tab of statusTabs; track tab.value) {
+          @for (tab of statusTabs(); track tab.value) {
             <button class="filter-tab" [class.active]="activeStatus() === tab.value" (click)="setStatus(tab.value)">
               {{ tab.label }}
               <span class="tab-count">{{ tab.count }}</span>
@@ -57,24 +56,29 @@ type LBC = typeof MOCK_LBCS[number];
         <div class="filter-right">
           <select class="filter-select" [(ngModel)]="regionFilter" (change)="applyFilters()">
             <option value="">All Regions</option>
-            @for (r of regions; track r) { <option [value]="r">{{ r }}</option> }
+            @for (r of store.regions(); track r) { <option [value]="r">{{ r }}</option> }
           </select>
         </div>
       </div>
 
       <!-- Data Table -->
       <app-data-table
-        [data]="filteredLbcs()"
+        [data]="store.lbcs()"
         [columns]="columns"
         [actions]="actions"
-        [loading]="loading()"
+        [loading]="store.isLoading()"
         [selectable]="true"
         [searchable]="true"
         searchPlaceholder="Search LBCs by name, region, code..."
+        (onSelectionChange)="onSelectionChange($event)"
       >
         <div bulk-actions>
-          <button class="btn btn-ghost btn-sm">Suspend Selected</button>
-          <button class="btn btn-ghost btn-sm">Export Selected</button>
+          <button class="btn btn-ghost btn-sm" [disabled]="!store.selectedIds().length" (click)="onBulkSuspend()">
+            Suspend Selected
+          </button>
+          <button class="btn btn-ghost btn-sm" [disabled]="!store.selectedIds().length" (click)="onExportSelected()">
+            Export Selected
+          </button>
         </div>
         <div toolbar-actions>
           <button class="btn btn-ghost btn-sm">
@@ -171,35 +175,25 @@ type LBC = typeof MOCK_LBCS[number];
   `]
 })
 export class LbcListComponent implements OnInit {
-  readonly lbcs = signal(MOCK_LBCS as LBC[]);
-  readonly loading = signal(false);
+  readonly store = inject(LbcStore);
   readonly activeStatus = signal('all');
   regionFilter = '';
 
-  readonly regions = [...new Set(MOCK_LBCS.map(l => l.region))].sort();
+  readonly stats = computed(() => [
+    { label: 'Total LBCs', value: this.store.total(), icon: 'business_center', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
+    { label: 'Active', value: this.store.totalActive(), icon: 'check_circle', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
+    { label: 'Pending', value: this.store.totalPending(), icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
+    { label: 'Suspended', value: this.store.totalSuspended(), icon: 'block', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
+  ]);
 
-  readonly stats = [
-    { label: 'Total LBCs', value: MOCK_LBCS.length, icon: 'business_center', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
-    { label: 'Active', value: MOCK_LBCS.filter(l => l.status === EntityStatus.ACTIVE).length, icon: 'check_circle', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
-    { label: 'Pending', value: MOCK_LBCS.filter(l => l.status === EntityStatus.PENDING).length, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
-    { label: 'Suspended', value: MOCK_LBCS.filter(l => l.status === EntityStatus.SUSPENDED).length, icon: 'block', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
-  ];
+  readonly statusTabs = computed(() => [
+    { label: 'All', value: 'all', count: this.store.total() },
+    { label: 'Active', value: EntityStatus.ACTIVE, count: this.store.totalActive() },
+    { label: 'Pending', value: EntityStatus.PENDING, count: this.store.totalPending() },
+    { label: 'Suspended', value: EntityStatus.SUSPENDED, count: this.store.totalSuspended() },
+  ]);
 
-  readonly statusTabs = [
-    { label: 'All', value: 'all', count: MOCK_LBCS.length },
-    { label: 'Active', value: EntityStatus.ACTIVE, count: MOCK_LBCS.filter(l => l.status === EntityStatus.ACTIVE).length },
-    { label: 'Pending', value: EntityStatus.PENDING, count: MOCK_LBCS.filter(l => l.status === EntityStatus.PENDING).length },
-    { label: 'Suspended', value: EntityStatus.SUSPENDED, count: MOCK_LBCS.filter(l => l.status === EntityStatus.SUSPENDED).length },
-  ];
-
-  readonly filteredLbcs = computed(() => {
-    let data = this.lbcs();
-    if (this.activeStatus() !== 'all') data = data.filter(l => l.status === this.activeStatus());
-    if (this.regionFilter) data = data.filter(l => l.region === this.regionFilter);
-    return data;
-  });
-
-  readonly columns: Column<LBC>[] = [
+  readonly columns: Column<Lbc>[] = [
     { key: 'id', label: 'LBC ID', width: '120px', sortable: true },
     { key: 'name', label: 'LBC Name', sortable: true, type: 'avatar' },
     { key: 'region', label: 'Region', sortable: true },
@@ -221,7 +215,7 @@ export class LbcListComponent implements OnInit {
     { key: 'joinedDate', label: 'Joined', type: 'date', sortable: true },
   ];
 
-  readonly actions: TableAction<LBC>[] = [
+  readonly actions: TableAction<Lbc>[] = [
     { label: 'View', icon: 'visibility', handler: (row) => console.log('view', row.id) },
     { label: 'Edit', icon: 'edit', handler: (row) => console.log('edit', row.id) },
     {
@@ -229,15 +223,42 @@ export class LbcListComponent implements OnInit {
       icon: 'block',
       color: '#dc2626',
       condition: (row) => row.status === EntityStatus.ACTIVE,
-      handler: (row) => console.log('suspend', row.id)
+      handler: (row) => this.store.suspendOne(row.id),
     },
   ];
 
   ngOnInit(): void {
-    this.loading.set(true);
-    setTimeout(() => this.loading.set(false), 600);
+    this.store.load({});
   }
 
-  setStatus(status: string): void { this.activeStatus.set(status); }
-  applyFilters(): void {}
+  setStatus(status: string): void {
+    this.activeStatus.set(status);
+    this.applyFilters();
+  }
+
+  applyFilters(): void {
+    this.store.load({
+      status: this.activeStatus() === 'all' ? undefined : this.activeStatus(),
+      region: this.regionFilter || undefined,
+    });
+  }
+
+  onSelectionChange(rows: Lbc[]): void {
+    this.store.setSelectedIds(rows.map(r => r.id));
+  }
+
+  onBulkSuspend(): void {
+    this.store.bulkSuspend(this.store.selectedIds());
+  }
+
+  onExport(): void {
+    this.store.exportCsv({
+      status: this.activeStatus() === 'all' ? undefined : this.activeStatus(),
+      region: this.regionFilter || undefined,
+    });
+  }
+
+  onExportSelected(): void {
+    this.store.exportCsv({ ids: this.store.selectedIds() });
+  }
 }

@@ -1,28 +1,19 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../../../../core/authentication/auth.service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule],
   template: `
     <div class="login-page animate-fade-in">
       <div class="login-header">
         <h2 class="login-title">Welcome back</h2>
         <p class="login-subtitle">Sign in to your SoilTech Portal account</p>
-      </div>
-
-      <!-- Demo Credentials -->
-      <div class="demo-creds">
-        <p class="demo-label">Demo credentials:</p>
-        @for (cred of demoCreds; track cred.email) {
-          <button class="demo-btn" (click)="fillCred(cred)">
-            <strong>{{ cred.role }}</strong> — {{ cred.email }}
-          </button>
-        }
       </div>
 
       <form [formGroup]="form" (ngSubmit)="onSubmit()" class="login-form">
@@ -53,7 +44,6 @@ import { AuthService } from '../../../../../core/authentication/auth.service';
         <div class="form-group">
           <div class="label-row">
             <label class="form-label">Password</label>
-            <a routerLink="/auth/forgot-password" class="forgot-link">Forgot password?</a>
           </div>
           <div class="input-wrapper" [class.error]="isFieldError('password')">
             <span class="input-icon material-symbols-rounded">lock</span>
@@ -100,36 +90,9 @@ import { AuthService } from '../../../../../core/authentication/auth.service';
   styles: [`
     .login-page { width: 100%; max-width: 400px; }
 
-    .login-header { margin-bottom: 24px; }
+    .login-header { margin-bottom: 32px; }
     .login-title { font-size: 1.625rem; font-weight: 800; color: var(--color-text-primary); letter-spacing: -0.03em; }
     .login-subtitle { color: var(--color-text-secondary); font-size: 0.9375rem; margin-top: 4px; }
-
-    .demo-creds {
-      background: var(--color-surface-2);
-      border: 1px solid var(--color-border-light);
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 24px;
-    }
-
-    .demo-label { font-size: 0.75rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-
-    .demo-btn {
-      display: block;
-      width: 100%;
-      text-align: left;
-      background: transparent;
-      border: none;
-      padding: 4px 0;
-      font-size: 0.8125rem;
-      color: var(--color-primary);
-      cursor: pointer;
-      font-family: inherit;
-
-      strong { color: var(--color-text-primary); }
-
-      &:hover { text-decoration: underline; }
-    }
 
     .form-error {
       display: flex;
@@ -147,8 +110,7 @@ import { AuthService } from '../../../../../core/authentication/auth.service';
 
     .form-group { margin-bottom: 18px; }
     .form-label { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: 6px; }
-    .label-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-    .forgot-link { font-size: 0.8125rem; color: var(--color-primary); text-decoration: none; &:hover { text-decoration: underline; } }
+    .label-row { display: flex; align-items: center; margin-bottom: 6px; }
 
     .input-wrapper {
       position: relative;
@@ -264,16 +226,6 @@ export class LoginComponent {
     rememberMe: [false],
   });
 
-  readonly demoCreds = [
-    { role: 'Super Admin', email: 'admin@soiltech.com', password: 'demo123' },
-    { role: 'Ops Manager', email: 'ops@soiltech.com', password: 'demo123' },
-    { role: 'Finance Manager', email: 'finance@soiltech.com', password: 'demo123' },
-  ];
-
-  fillCred(cred: { email: string; password: string }): void {
-    this.form.patchValue({ email: cred.email, password: cred.password });
-  }
-
   isFieldError(field: string): boolean {
     const ctrl = this.form.get(field);
     return !!(ctrl?.invalid && ctrl.touched);
@@ -299,9 +251,9 @@ export class LoginComponent {
         this.loading.set(false);
         this.router.navigate(['/dashboard']);
       },
-      error: (err) => {
+      error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.error.set(err.message ?? 'Invalid email or password. Please try again.');
+        this.error.set(err.error?.message ?? 'Invalid email or password. Please try again.');
       },
     });
   }

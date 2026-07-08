@@ -1,11 +1,13 @@
-export const API_BASE = '/api/v1';
+import { environment } from '../../../environments/environment';
+
+export const API_BASE = environment.apiUrl;
 
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: `${API_BASE}/auth/login`,
     LOGOUT: `${API_BASE}/auth/logout`,
     REFRESH: `${API_BASE}/auth/refresh`,
-    ME: `${API_BASE}/auth/me`,
+    ME: `${API_BASE}/admin/me`,
     FORGOT_PASSWORD: `${API_BASE}/auth/forgot-password`,
     RESET_PASSWORD: `${API_BASE}/auth/reset-password`,
   },

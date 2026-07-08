@@ -11,7 +11,9 @@ import { RouterOutlet } from '@angular/router';
         <div class="auth-bg-pattern"></div>
         <div class="auth-bg-content">
           <div class="auth-brand">
-            <div class="brand-logo">🌱</div>
+            <div class="brand-logo">
+              <img src="/icons/soiltech-logo.jpeg" alt="SoilTech" class="brand-logo-img" />
+            </div>
             <h1 class="brand-title">SoilTech Portal</h1>
             <p class="brand-subtitle">Agricultural Supply Chain Management</p>
           </div>
@@ -75,8 +77,23 @@ import { RouterOutlet } from '@angular/router';
     .auth-brand { margin-bottom: 48px; }
 
     .brand-logo {
-      font-size: 48px;
+      width: 80px;
+      height: 80px;
+      background: white;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       margin-bottom: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+
+    .brand-logo-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
     }
 
     .brand-title {

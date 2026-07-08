@@ -1,14 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap, of, delay } from 'rxjs';
+import { Observable, tap, switchMap, map, catchError, of } from 'rxjs';
 import { AppStore } from '../state/app.store';
 import { StorageService } from '../services/storage.service';
 import { STORAGE_KEYS } from '../constants/app.constants';
 import { API_ENDPOINTS } from '../constants/api.constants';
-import { LoginRequest, LoginResponse, AuthUser } from '../models/user.model';
+import { LoginRequest, LoginResponse, AuthUser, User } from '../models/user.model';
 import { ROLE_PERMISSIONS } from '../permissions/role-permissions';
-import { MOCK_USERS } from '../../shared/data/mock-auth.data';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -17,21 +16,24 @@ export class AuthService {
   private readonly store = inject(AppStore);
   private readonly storage = inject(StorageService);
 
-  login(req: LoginRequest): Observable<LoginResponse> {
-    // Mock login — replace with: return this.http.post<LoginResponse>(API_ENDPOINTS.AUTH.LOGIN, req)
-    const mockUser = MOCK_USERS.find(u => u.email === req.email);
-    if (!mockUser) throw new Error('Invalid credentials');
-
-    const response: LoginResponse = {
-      user: { ...mockUser, accessToken: 'mock-token', refreshToken: 'mock-refresh', expiresAt: Date.now() + 86400000 },
-      accessToken: 'mock-token',
-      refreshToken: 'mock-refresh',
-      expiresIn: 86400,
-    };
-
-    return of(response).pipe(
-      delay(800),
-      tap(res => this.handleLoginSuccess(res))
+  login(req: LoginRequest): Observable<void> {
+    return this.http.post<LoginResponse>(API_ENDPOINTS.AUTH.LOGIN, req).pipe(
+      tap(res => this.storeTokens(res)),
+      switchMap(loginRes => {
+        const token = this.extractToken(loginRes);
+        return this.http.get<User>(API_ENDPOINTS.AUTH.ME, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).pipe(
+          tap(profile => this.hydrateUser(loginRes, profile)),
+          catchError(() => {
+            if (loginRes.user) {
+              this.hydrateUser(loginRes, loginRes.user as User);
+            }
+            return of(null);
+          })
+        );
+      }),
+      map(() => void 0)
     );
   }
 
@@ -61,13 +63,27 @@ export class AuthService {
     return this.store.user();
   }
 
-  private handleLoginSuccess(res: LoginResponse): void {
+  private extractToken(res: LoginResponse): string {
+    return res.accessToken ?? res.token ?? '';
+  }
+
+  private storeTokens(res: LoginResponse): void {
+    const token = this.extractToken(res);
+    this.storage.set(STORAGE_KEYS.AUTH_TOKEN, token);
+    if (res.refreshToken) {
+      this.storage.set(STORAGE_KEYS.REFRESH_TOKEN, res.refreshToken);
+    }
+  }
+
+  private hydrateUser(loginRes: LoginResponse, profile: User): void {
+    const token = this.extractToken(loginRes);
     const user: AuthUser = {
-      ...res.user,
-      permissions: ROLE_PERMISSIONS[res.user.role],
+      ...profile,
+      accessToken: token,
+      refreshToken: loginRes.refreshToken ?? '',
+      expiresAt: Date.now() + (loginRes.expiresIn ?? 86400) * 1000,
+      permissions: ROLE_PERMISSIONS[profile.role],
     };
-    this.storage.set(STORAGE_KEYS.AUTH_TOKEN, res.accessToken);
-    this.storage.set(STORAGE_KEYS.REFRESH_TOKEN, res.refreshToken);
     this.storage.set(STORAGE_KEYS.USER, user);
     this.store.setUser(user);
   }

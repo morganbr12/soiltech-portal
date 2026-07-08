@@ -32,7 +32,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Reports', icon: 'assessment', route: '/reports', permission: Permission.REPORTS_VIEW },
   { label: 'Analytics', icon: 'insights', route: '/analytics', permission: Permission.ANALYTICS_VIEW },
   { label: 'divider', icon: '', divider: true },
-  { label: 'divider', icon: '', divider: true },
   { label: 'Customers', icon: 'people', route: '/customers', permission: Permission.CUSTOMERS_VIEW },
   { label: 'Verification', icon: 'verified_user', route: '/customers/verification', permission: Permission.CUSTOMERS_VERIFY },
   { label: 'Cust. Orders', icon: 'shopping_bag', route: '/customers/orders', permission: Permission.CUSTOMERS_ORDERS },
@@ -57,7 +56,7 @@ const NAV_ITEMS: NavItem[] = [
       <!-- Logo -->
       <div class="sidebar__logo">
         <div class="logo-mark">
-          <span class="logo-icon">🌱</span>
+          <img src="/icons/soiltech-logo.jpeg" alt="SoilTech" class="logo-img" />
         </div>
         @if (!collapsed()) {
           <div class="logo-text animate-fade-in">
@@ -152,15 +151,17 @@ const NAV_ITEMS: NavItem[] = [
     .logo-mark {
       width: 36px;
       height: 36px;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
       border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
+      overflow: hidden;
+      background: white;
+      border: 1px solid var(--color-border-light);
     }
 
-    .logo-icon { font-size: 20px; }
+    .logo-img { width: 100%; height: 100%; object-fit: contain; display: block; }
     .logo-name { font-weight: 800; font-size: 1.125rem; color: var(--color-primary); letter-spacing: -0.03em; display: block; }
     .logo-tagline { font-size: 0.6875rem; color: var(--color-text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; display: block; }
 

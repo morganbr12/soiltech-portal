@@ -33,8 +33,9 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  user: AuthUser;
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
+  user?: Partial<AuthUser>;
+  accessToken?: string;
+  token?: string;
+  refreshToken?: string;
+  expiresIn?: number;
 }
