@@ -1,9 +1,9 @@
-import { Component, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
-import { MOCK_CUSTOMER_WALLETS } from '../../../data/customer.mock';
+import { CustomerStore } from '../../../store/customer.store';
 import { CustomerWallet, WalletStatus } from '../../../domain/customer.model';
 
 type WalletRow = CustomerWallet & Record<string, unknown>;
@@ -18,7 +18,7 @@ type WalletRow = CustomerWallet & Record<string, unknown>;
         title="Customer Wallets"
         subtitle="Monitor wallet balances, transactions, and statuses"
         icon="account_balance_wallet"
-        [badge]="wallets().length"
+        [badge]="store.wallets().length"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Customers', url: '/customers' }, { label: 'Wallets' }]"
       >
         <button class="btn btn-secondary btn-sm" (click)="exportWallets()">
@@ -31,7 +31,7 @@ type WalletRow = CustomerWallet & Record<string, unknown>;
 
       <!-- Stats -->
       <div class="quick-stats stagger-children">
-        @for (stat of stats; track stat.label) {
+        @for (stat of stats(); track stat.label) {
           <div class="quick-stat animate-slide-up">
             <div class="qs-icon" [style.background]="stat.bg">
               <span class="material-symbols-rounded" [style.color]="stat.color">{{ stat.icon }}</span>
@@ -48,7 +48,7 @@ type WalletRow = CustomerWallet & Record<string, unknown>;
       <div class="balance-dist">
         <h3 class="section-title">Balance Distribution</h3>
         <div class="dist-bands">
-          @for (band of balanceBands; track band.label) {
+          @for (band of balanceBands(); track band.label) {
             <div class="dist-band">
               <div class="dist-bar-wrap">
                 <div class="dist-bar-fill" [style.height.%]="band.pct" [style.background]="band.color"></div>
@@ -63,7 +63,7 @@ type WalletRow = CustomerWallet & Record<string, unknown>;
       <!-- Filters -->
       <div class="filter-bar">
         <div class="filter-tabs">
-          @for (tab of statusTabs; track tab.value) {
+          @for (tab of statusTabs(); track tab.value) {
             <button class="filter-tab" [class.active]="activeStatus() === tab.value" (click)="setStatus(tab.value)">
               {{ tab.label }} <span class="tab-count">{{ tab.count }}</span>
             </button>
@@ -72,7 +72,7 @@ type WalletRow = CustomerWallet & Record<string, unknown>;
         <div class="filter-right">
           <select class="filter-select" [(ngModel)]="regionFilter" (change)="doFilter()">
             <option value="">All Regions</option>
-            @for (r of regions; track r) { <option [value]="r">{{ r }}</option> }
+            @for (r of regions(); track r) { <option [value]="r">{{ r }}</option> }
           </select>
         </div>
       </div>
@@ -81,7 +81,7 @@ type WalletRow = CustomerWallet & Record<string, unknown>;
         [data]="filteredWallets()"
         [columns]="columns"
         [actions]="actions"
-        [loading]="loading()"
+        [loading]="store.isLoadingWallets()"
         [selectable]="true"
         [searchable]="true"
         searchPlaceholder="Search wallets by customer, ID..."
@@ -118,43 +118,55 @@ type WalletRow = CustomerWallet & Record<string, unknown>;
   `]
 })
 export class CustomerWalletsComponent implements OnInit {
-  readonly wallets = signal(MOCK_CUSTOMER_WALLETS as WalletRow[]);
-  readonly loading = signal(false);
+  protected readonly store = inject(CustomerStore);
+
   readonly activeStatus = signal('all');
   regionFilter = '';
 
-  readonly regions = [...new Set(MOCK_CUSTOMER_WALLETS.map(w => w.region))].sort();
+  readonly regions = computed(() =>
+    [...new Set(this.store.wallets().map(w => w.region))].sort()
+  );
 
-  readonly totalBalance = MOCK_CUSTOMER_WALLETS.reduce((s, w) => s + w.balance, 0);
-  readonly totalDeposited = MOCK_CUSTOMER_WALLETS.reduce((s, w) => s + w.totalDeposited, 0);
-  readonly totalWithdrawn = MOCK_CUSTOMER_WALLETS.reduce((s, w) => s + w.totalWithdrawn, 0);
+  readonly stats = computed(() => {
+    const s = this.store.walletSummary();
+    return [
+      { label: 'Total Wallets', value: s.totalWallets, icon: 'account_balance_wallet', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
+      { label: 'Total Balance', value: 'GHS ' + (s.totalBalance / 1000).toFixed(1) + 'K', icon: 'savings', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
+      { label: 'Total Deposited', value: 'GHS ' + (s.totalDeposited / 1000).toFixed(1) + 'K', icon: 'add_card', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
+      { label: 'Total Withdrawn', value: 'GHS ' + (s.totalWithdrawn / 1000).toFixed(1) + 'K', icon: 'money_off', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
+      { label: 'Frozen', value: s.frozen, icon: 'lock', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
+    ];
+  });
 
-  readonly stats = [
-    { label: 'Total Wallets', value: MOCK_CUSTOMER_WALLETS.length, icon: 'account_balance_wallet', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
-    { label: 'Total Balance', value: 'GHS ' + (this.totalBalance / 1000).toFixed(1) + 'K', icon: 'savings', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
-    { label: 'Total Deposited', value: 'GHS ' + (this.totalDeposited / 1000).toFixed(1) + 'K', icon: 'add_card', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
-    { label: 'Total Withdrawn', value: 'GHS ' + (this.totalWithdrawn / 1000).toFixed(1) + 'K', icon: 'money_off', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
-    { label: 'Frozen', value: MOCK_CUSTOMER_WALLETS.filter(w => w.status === WalletStatus.FROZEN).length, icon: 'lock', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
-  ];
+  readonly statusTabs = computed(() => {
+    const wallets = this.store.wallets();
+    const total = wallets.length;
+    const active = wallets.filter(w => w.status === WalletStatus.ACTIVE).length;
+    const frozen = wallets.filter(w => w.status === WalletStatus.FROZEN).length;
+    const suspended = wallets.filter(w => w.status === WalletStatus.SUSPENDED).length;
+    return [
+      { label: 'All', value: 'all', count: total },
+      { label: 'Active', value: WalletStatus.ACTIVE, count: active },
+      { label: 'Frozen', value: WalletStatus.FROZEN, count: frozen },
+      { label: 'Suspended', value: WalletStatus.SUSPENDED, count: suspended },
+    ];
+  });
 
-  readonly statusTabs = [
-    { label: 'All', value: 'all', count: MOCK_CUSTOMER_WALLETS.length },
-    { label: 'Active', value: WalletStatus.ACTIVE, count: MOCK_CUSTOMER_WALLETS.filter(w => w.status === WalletStatus.ACTIVE).length },
-    { label: 'Frozen', value: WalletStatus.FROZEN, count: MOCK_CUSTOMER_WALLETS.filter(w => w.status === WalletStatus.FROZEN).length },
-    { label: 'Suspended', value: WalletStatus.SUSPENDED, count: MOCK_CUSTOMER_WALLETS.filter(w => w.status === WalletStatus.SUSPENDED).length },
-  ];
-
-  readonly balanceBands = [
-    { label: 'GHS 0', count: MOCK_CUSTOMER_WALLETS.filter(w => w.balance === 0).length, color: '#94a3b8', pct: 0 },
-    { label: '< 500', count: MOCK_CUSTOMER_WALLETS.filter(w => w.balance > 0 && w.balance < 500).length, color: '#d97706', pct: 0 },
-    { label: '500-1K', count: MOCK_CUSTOMER_WALLETS.filter(w => w.balance >= 500 && w.balance < 1000).length, color: '#0284c7', pct: 0 },
-    { label: '1K-2K', count: MOCK_CUSTOMER_WALLETS.filter(w => w.balance >= 1000 && w.balance < 2000).length, color: '#16a34a', pct: 0 },
-    { label: '2K-5K', count: MOCK_CUSTOMER_WALLETS.filter(w => w.balance >= 2000 && w.balance < 5000).length, color: '#1a7a4a', pct: 0 },
-    { label: '5K+', count: MOCK_CUSTOMER_WALLETS.filter(w => w.balance >= 5000).length, color: '#7c3aed', pct: 0 },
-  ].map(b => ({ ...b, pct: Math.round(b.count / MOCK_CUSTOMER_WALLETS.length * 100) }));
+  readonly balanceBands = computed(() => {
+    const wallets = this.store.wallets();
+    const total = wallets.length || 1;
+    return [
+      { label: 'GHS 0', count: wallets.filter(w => w.balance === 0).length, color: '#94a3b8' },
+      { label: '< 500', count: wallets.filter(w => w.balance > 0 && w.balance < 500).length, color: '#d97706' },
+      { label: '500-1K', count: wallets.filter(w => w.balance >= 500 && w.balance < 1000).length, color: '#0284c7' },
+      { label: '1K-2K', count: wallets.filter(w => w.balance >= 1000 && w.balance < 2000).length, color: '#16a34a' },
+      { label: '2K-5K', count: wallets.filter(w => w.balance >= 2000 && w.balance < 5000).length, color: '#1a7a4a' },
+      { label: '5K+', count: wallets.filter(w => w.balance >= 5000).length, color: '#7c3aed' },
+    ].map(b => ({ ...b, pct: Math.round(b.count / total * 100) }));
+  });
 
   readonly filteredWallets = computed(() => {
-    let data = this.wallets();
+    let data = this.store.wallets() as WalletRow[];
     if (this.activeStatus() !== 'all') data = data.filter(w => w.status === this.activeStatus());
     if (this.regionFilter) data = data.filter(w => w.region === this.regionFilter);
     return data;
@@ -187,8 +199,7 @@ export class CustomerWalletsComponent implements OnInit {
   ];
 
   ngOnInit(): void {
-    this.loading.set(true);
-    setTimeout(() => this.loading.set(false), 600);
+    this.store.loadWallets({});
   }
 
   setStatus(s: string): void { this.activeStatus.set(s); }
@@ -197,9 +208,10 @@ export class CustomerWalletsComponent implements OnInit {
   topUp(): void { console.log('top-up'); }
 
   freeze(r: WalletRow): void {
-    this.wallets.update(list => list.map(x => x.id === r.id ? { ...x, status: WalletStatus.FROZEN } : x));
+    this.store.freezeWallet(r.id, { onSuccess: () => {}, onError: (e) => console.error(e) });
   }
+
   unfreeze(r: WalletRow): void {
-    this.wallets.update(list => list.map(x => x.id === r.id ? { ...x, status: WalletStatus.ACTIVE } : x));
+    this.store.unfreezeWallet(r.id, { onSuccess: () => {}, onError: (e) => console.error(e) });
   }
 }

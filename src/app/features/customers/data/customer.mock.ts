@@ -28,7 +28,8 @@ function ghanaLng(): number { return rndFloat(-3.0, 1.2, 4); }
 let seq = 1;
 function nextId(prefix: string): string { return `${prefix}-${String(seq++).padStart(4, '0')}`; }
 
-export const MOCK_CUSTOMERS: Customer[] = Array.from({ length: 80 }, (_, i) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const MOCK_CUSTOMERS: any[] = Array.from({ length: 80 }, (_, i) => {
   const fn = FIRST_NAMES[i % FIRST_NAMES.length];
   const ln = LAST_NAMES[i % LAST_NAMES.length];
   const region = REGIONS[i % REGIONS.length];
@@ -70,7 +71,8 @@ export const MOCK_CUSTOMERS: Customer[] = Array.from({ length: 80 }, (_, i) => {
   };
 });
 
-export const MOCK_CUSTOMER_ORDERS: CustomerOrder[] = Array.from({ length: 120 }, (_, i) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const MOCK_CUSTOMER_ORDERS: any[] = Array.from({ length: 120 }, (_, i) => {
   const cust = MOCK_CUSTOMERS[i % MOCK_CUSTOMERS.length];
   const qty = rndNum(100, 5000);
   const price = rndFloat(1.5, 8.0);

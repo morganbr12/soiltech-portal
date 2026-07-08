@@ -73,7 +73,7 @@ export interface TableAction<T = Record<string, unknown>> {
                 </th>
               }
               @for (col of _columns; track col.key) {
-                <th [style.width]="col.width" [class.sortable]="col.sortable" (click)="col.sortable && sort(colKey(col))">
+                <th [style.width]="col.width" [class.sortable]="col.sortable" [class.text-center]="col.align === 'center'" [class.text-right]="col.align === 'right'" (click)="col.sortable && sort(colKey(col))">
                   <span>{{ col.label }}</span>
                   @if (col.sortable) {
                     <span class="sort-icon material-symbols-rounded">
@@ -119,7 +119,7 @@ export interface TableAction<T = Record<string, unknown>> {
                     </td>
                   }
                   @for (col of _columns; track col.key) {
-                    <td [class.text-right]="col.align === 'right'" [class.td-currency]="col.type === 'currency'">
+                    <td [class.text-center]="col.align === 'center'" [class.text-right]="col.align === 'right'" [class.td-currency]="col.type === 'currency'">
                       @switch (col.type) {
                         @case ('status') {
                           @if (col.statusMap) {
@@ -240,6 +240,7 @@ export interface TableAction<T = Record<string, unknown>> {
     .th-check, .td-check { width: 40px; }
     .th-actions, .td-actions { width: 52px; text-align: center; }
     .text-right { text-align: right; }
+    .text-center { text-align: center; }
     .currency-cell { font-weight: 600; color: var(--color-primary); }
     .date-cell { color: var(--color-text-secondary); white-space: nowrap; }
     .avatar-cell { display: flex; align-items: center; gap: 10px; font-weight: 500; }

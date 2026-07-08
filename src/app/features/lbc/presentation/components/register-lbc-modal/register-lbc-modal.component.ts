@@ -1,14 +1,8 @@
 import { Component, inject, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
+import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { LbcStore } from '../../../store/lbc.store';
 import { CreateLbcRequest } from '../../../domain/lbc.model';
-
-function passwordMatch(control: AbstractControl): ValidationErrors | null {
-  const pw = control.get('password')?.value;
-  const confirm = control.get('confirmPassword')?.value;
-  return pw && confirm && pw !== confirm ? { passwordMismatch: true } : null;
-}
 
 const GHANA_REGIONS = [
   'Greater Accra', 'Ashanti', 'Western', 'Eastern', 'Central',
@@ -35,7 +29,6 @@ const GHANA_REGIONS = [
             </div>
             <div>
               <h2 class="drawer-title" id="modal-title">Register LBC</h2>
-              <p class="drawer-subtitle">Add a new Licensed Buying Company</p>
             </div>
           </div>
           <button class="close-btn" (click)="closed.emit()" aria-label="Close">
@@ -116,39 +109,6 @@ const GHANA_REGIONS = [
                 placeholder="contact@lbc.com" [class.invalid]="invalid('email')">
               @if (invalid('email')) {
                 <span class="field-error">Valid email is required</span>
-              }
-            </div>
-          </div>
-
-          <!-- Password + Confirm Password (2-col) -->
-          <div class="field-row">
-            <div class="field-group">
-              <label class="field-label required" for="password">Password</label>
-              <div class="password-wrap" [class.invalid]="invalid('password')">
-                <input id="password" class="field-input password-input" [type]="showPassword() ? 'text' : 'password'"
-                  formControlName="password" placeholder="Min. 8 characters" [class.invalid]="invalid('password')">
-                <button type="button" class="eye-btn" (click)="togglePassword()" tabindex="-1">
-                  <span class="material-symbols-rounded">{{ showPassword() ? 'visibility_off' : 'visibility' }}</span>
-                </button>
-              </div>
-              @if (invalid('password')) {
-                <span class="field-error">
-                  @if (form.get('password')?.hasError('required')) { Password is required }
-                  @else { Must be at least 8 characters }
-                </span>
-              }
-            </div>
-            <div class="field-group">
-              <label class="field-label required" for="confirmPassword">Confirm Password</label>
-              <div class="password-wrap" [class.invalid]="invalidConfirm()">
-                <input id="confirmPassword" class="field-input password-input" [type]="showConfirm() ? 'text' : 'password'"
-                  formControlName="confirmPassword" placeholder="Re-enter password" [class.invalid]="invalidConfirm()">
-                <button type="button" class="eye-btn" (click)="toggleConfirm()" tabindex="-1">
-                  <span class="material-symbols-rounded">{{ showConfirm() ? 'visibility_off' : 'visibility' }}</span>
-                </button>
-              </div>
-              @if (invalidConfirm()) {
-                <span class="field-error">Passwords do not match</span>
               }
             </div>
           </div>
@@ -422,8 +382,6 @@ export class RegisterLbcModalComponent {
   readonly regions = GHANA_REGIONS;
   readonly isSaving = signal(false);
   readonly errorMsg = signal('');
-  readonly showPassword = signal(false);
-  readonly showConfirm = signal(false);
 
   private readonly fb = inject(FormBuilder);
 
@@ -435,22 +393,12 @@ export class RegisterLbcModalComponent {
     manager:         ['', Validators.required],
     phone:           ['', Validators.required],
     email:           ['', [Validators.required, Validators.email]],
-    password:        ['', [Validators.required, Validators.minLength(8)]],
-    confirmPassword: ['', Validators.required],
-  }, { validators: passwordMatch });
+  });
 
   invalid(field: string): boolean {
     const ctrl = this.form.get(field);
     return !!(ctrl?.invalid && ctrl?.touched);
   }
-
-  invalidConfirm(): boolean {
-    const ctrl = this.form.get('confirmPassword');
-    return !!(ctrl?.touched && (ctrl?.invalid || this.form.hasError('passwordMismatch')));
-  }
-
-  togglePassword(): void { this.showPassword.set(!this.showPassword()); }
-  toggleConfirm(): void  { this.showConfirm.set(!this.showConfirm()); }
 
   onBackdropClick(e: MouseEvent): void {
     if ((e.target as HTMLElement).classList.contains('backdrop')) {
@@ -474,7 +422,6 @@ export class RegisterLbcModalComponent {
       manager:  v.manager!,
       phone:    v.phone!,
       email:    v.email!,
-      password: v.password!,
     };
 
     this.store.create(payload, {

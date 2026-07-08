@@ -337,7 +337,6 @@ export class LbcListComponent implements OnInit {
   ]);
 
   readonly columns: Column<Lbc>[] = [
-    { key: 'id', label: 'LBC ID', width: '120px', sortable: true },
     { key: 'name', label: 'LBC Name', sortable: true },
     { key: 'region', label: 'Region', sortable: true },
     { key: 'manager', label: 'Manager' },

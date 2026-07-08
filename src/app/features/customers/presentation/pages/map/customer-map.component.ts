@@ -1,11 +1,11 @@
-import { Component, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
-import { MOCK_CUSTOMERS } from '../../../data/customer.mock';
-import { CustomerStatus, CustomerTier } from '../../../domain/customer.model';
+import { CustomerStore } from '../../../store/customer.store';
+import { Customer, CustomerStatus, CustomerTier } from '../../../domain/customer.model';
 
-type CustomerRow = typeof MOCK_CUSTOMERS[number];
+type CustomerRow = Customer & Record<string, unknown>;
 
 @Component({
   selector: 'app-customer-map',
@@ -39,7 +39,7 @@ type CustomerRow = typeof MOCK_CUSTOMERS[number];
         <div class="map-filters">
           <div class="filter-section">
             <div class="filter-title">Status</div>
-            @for (s of statusOptions; track s.value) {
+            @for (s of statusOptions(); track s.value) {
               <label class="filter-checkbox">
                 <input type="checkbox" [checked]="selectedStatuses.includes(s.value)" (change)="toggleStatus(s.value)">
                 <span class="filter-dot" [style.background]="s.color"></span>
@@ -50,7 +50,7 @@ type CustomerRow = typeof MOCK_CUSTOMERS[number];
           </div>
           <div class="filter-section">
             <div class="filter-title">Tier</div>
-            @for (t of tierOptions; track t.value) {
+            @for (t of tierOptions(); track t.value) {
               <label class="filter-checkbox">
                 <input type="checkbox" [checked]="selectedTiers.includes(t.value)" (change)="toggleTier(t.value)">
                 <span class="filter-dot" [style.background]="t.color"></span>
@@ -63,7 +63,7 @@ type CustomerRow = typeof MOCK_CUSTOMERS[number];
             <div class="filter-title">Region</div>
             <select class="filter-select-sm" [(ngModel)]="regionFilter" (change)="filterCustomers()">
               <option value="">All Regions</option>
-              @for (r of regions; track r) { <option [value]="r">{{ r }}</option> }
+              @for (r of regions(); track r) { <option [value]="r">{{ r }}</option> }
             </select>
           </div>
         </div>
@@ -126,7 +126,7 @@ type CustomerRow = typeof MOCK_CUSTOMERS[number];
           <!-- Legend -->
           <div class="map-legend">
             <div class="legend-title">Legend</div>
-            @for (s of statusOptions; track s.value) {
+            @for (s of statusOptions(); track s.value) {
               <div class="legend-item">
                 <div class="legend-dot" [style.background]="s.color"></div>
                 <span>{{ s.label }}</span>
@@ -261,37 +261,48 @@ type CustomerRow = typeof MOCK_CUSTOMERS[number];
   `]
 })
 export class CustomerMapComponent implements OnInit {
-  readonly allCustomers = MOCK_CUSTOMERS;
+  protected readonly store = inject(CustomerStore);
+
   readonly selected = signal<CustomerRow | null>(null);
   searchQuery = '';
   selectedStatuses: string[] = Object.values(CustomerStatus);
   selectedTiers: string[] = Object.values(CustomerTier);
   regionFilter = '';
 
-  private _filtered = signal(MOCK_CUSTOMERS);
+  private _filtered = signal<CustomerRow[]>([]);
   readonly filteredCustomers = this._filtered.asReadonly();
 
-  readonly regions = [...new Set(MOCK_CUSTOMERS.map(c => c.region))].sort();
+  readonly regions = computed(() =>
+    [...new Set(this.store.customers().map(c => c.region))].sort()
+  );
 
-  readonly statusOptions = [
-    { label: 'Active', value: CustomerStatus.ACTIVE, color: '#16a34a', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.ACTIVE).length },
-    { label: 'Verified', value: CustomerStatus.VERIFIED, color: '#0284c7', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.VERIFIED).length },
-    { label: 'Pending', value: CustomerStatus.PENDING, color: '#d97706', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.PENDING).length },
-    { label: 'Suspended', value: CustomerStatus.SUSPENDED, color: '#dc2626', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.SUSPENDED).length },
-    { label: 'Rejected', value: CustomerStatus.REJECTED, color: '#94a3b8', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.REJECTED).length },
-  ];
+  readonly statusOptions = computed(() => {
+    const customers = this.store.customers();
+    return [
+      { label: 'Active', value: CustomerStatus.ACTIVE, color: '#16a34a', count: customers.filter(c => c.status === CustomerStatus.ACTIVE).length },
+      { label: 'Verified', value: CustomerStatus.VERIFIED, color: '#0284c7', count: customers.filter(c => c.status === CustomerStatus.VERIFIED).length },
+      { label: 'Pending', value: CustomerStatus.PENDING, color: '#d97706', count: customers.filter(c => c.status === CustomerStatus.PENDING).length },
+      { label: 'Suspended', value: CustomerStatus.SUSPENDED, color: '#dc2626', count: customers.filter(c => c.status === CustomerStatus.SUSPENDED).length },
+      { label: 'Rejected', value: CustomerStatus.REJECTED, color: '#94a3b8', count: customers.filter(c => c.status === CustomerStatus.REJECTED).length },
+    ];
+  });
 
-  readonly tierOptions = [
-    { label: 'Platinum', value: CustomerTier.PLATINUM, color: '#7c3aed', count: MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.PLATINUM).length },
-    { label: 'Gold', value: CustomerTier.GOLD, color: '#f59e0b', count: MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.GOLD).length },
-    { label: 'Silver', value: CustomerTier.SILVER, color: '#94a3b8', count: MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.SILVER).length },
-    { label: 'Bronze', value: CustomerTier.BRONZE, color: '#b45309', count: MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.BRONZE).length },
-  ];
+  readonly tierOptions = computed(() => {
+    const customers = this.store.customers();
+    return [
+      { label: 'Platinum', value: CustomerTier.PLATINUM, color: '#7c3aed', count: customers.filter(c => c.tier === CustomerTier.PLATINUM).length },
+      { label: 'Gold', value: CustomerTier.GOLD, color: '#f59e0b', count: customers.filter(c => c.tier === CustomerTier.GOLD).length },
+      { label: 'Silver', value: CustomerTier.SILVER, color: '#94a3b8', count: customers.filter(c => c.tier === CustomerTier.SILVER).length },
+      { label: 'Bronze', value: CustomerTier.BRONZE, color: '#b45309', count: customers.filter(c => c.tier === CustomerTier.BRONZE).length },
+    ];
+  });
 
-  ngOnInit(): void { this.filterCustomers(); }
+  ngOnInit(): void {
+    this.store.loadCustomers({ limit: 500 });
+  }
 
   filterCustomers(): void {
-    let data = this.allCustomers;
+    let data = this.store.customers() as CustomerRow[];
     if (this.searchQuery) {
       const q = this.searchQuery.toLowerCase();
       data = data.filter(c => `${c.firstName} ${c.lastName} ${c.email} ${c.region}`.toLowerCase().includes(q));

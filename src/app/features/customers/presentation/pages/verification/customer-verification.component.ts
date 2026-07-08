@@ -1,9 +1,9 @@
-import { Component, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
-import { MOCK_CUSTOMERS } from '../../../data/customer.mock';
+import { CustomerStore } from '../../../store/customer.store';
 import { Customer, CustomerStatus } from '../../../domain/customer.model';
 
 type CustomerRow = Customer & Record<string, unknown>;
@@ -18,7 +18,7 @@ type CustomerRow = Customer & Record<string, unknown>;
         title="Customer Verification"
         subtitle="Review and approve or reject customer KYC submissions"
         icon="verified_user"
-        [badge]="pendingCount"
+        [badge]="store.customerSummary().pending"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Customers', url: '/customers' }, { label: 'Verification' }]"
       >
         <button class="btn btn-secondary btn-sm" (click)="bulkApprove()">
@@ -28,7 +28,7 @@ type CustomerRow = Customer & Record<string, unknown>;
 
       <!-- Verification stats -->
       <div class="verif-stats">
-        @for (s of verifStats; track s.label) {
+        @for (s of verifStats(); track s.label) {
           <div class="verif-stat" [class.clickable]="true" (click)="setTab(s.value)">
             <div class="verif-stat__icon" [style.background]="s.bg">
               <span class="material-symbols-rounded" [style.color]="s.color">{{ s.icon }}</span>
@@ -42,7 +42,7 @@ type CustomerRow = Customer & Record<string, unknown>;
       <!-- Tabs -->
       <div class="filter-bar">
         <div class="filter-tabs">
-          @for (tab of tabs; track tab.value) {
+          @for (tab of tabs(); track tab.value) {
             <button class="filter-tab" [class.active]="activeTab() === tab.value" (click)="setTab(tab.value)">
               {{ tab.label }} <span class="tab-count">{{ tab.count }}</span>
             </button>
@@ -51,7 +51,7 @@ type CustomerRow = Customer & Record<string, unknown>;
         <div class="filter-right">
           <select class="filter-select" [(ngModel)]="regionFilter" (change)="doFilter()">
             <option value="">All Regions</option>
-            @for (r of regions; track r) { <option [value]="r">{{ r }}</option> }
+            @for (r of regions(); track r) { <option [value]="r">{{ r }}</option> }
           </select>
         </div>
       </div>
@@ -124,7 +124,7 @@ type CustomerRow = Customer & Record<string, unknown>;
         [data]="filteredCustomers()"
         [columns]="columns"
         [actions]="tableActions"
-        [loading]="loading()"
+        [loading]="store.isLoadingCustomers()"
         [searchable]="true"
         searchPlaceholder="Search customers..."
       />
@@ -214,34 +214,43 @@ type CustomerRow = Customer & Record<string, unknown>;
   `]
 })
 export class CustomerVerificationComponent implements OnInit {
+  protected readonly store = inject(CustomerStore);
   readonly CustomerStatus = CustomerStatus;
-  readonly all = signal(MOCK_CUSTOMERS as CustomerRow[]);
-  readonly loading = signal(false);
+
   readonly activeTab = signal<string>(CustomerStatus.PENDING);
   readonly selected = signal<CustomerRow | null>(null);
   regionFilter = '';
 
-  readonly regions = [...new Set(MOCK_CUSTOMERS.map(c => c.region))].sort();
-  readonly pendingCount = MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.PENDING).length;
+  readonly regions = computed(() =>
+    [...new Set(this.store.customers().map(c => c.region))].sort()
+  );
 
-  readonly verifStats = [
-    { label: 'Pending Review', value: CustomerStatus.PENDING, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.PENDING).length, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
-    { label: 'Verified', value: CustomerStatus.VERIFIED, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.VERIFIED).length, icon: 'verified', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
-    { label: 'Active', value: CustomerStatus.ACTIVE, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.ACTIVE).length, icon: 'check_circle', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
-    { label: 'Rejected', value: CustomerStatus.REJECTED, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.REJECTED).length, icon: 'cancel', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
-  ];
+  readonly verifStats = computed(() => {
+    const s = this.store.customerSummary();
+    return [
+      { label: 'Pending Review', value: CustomerStatus.PENDING, count: s.pending, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
+      { label: 'Verified', value: CustomerStatus.VERIFIED, count: s.verified, icon: 'verified', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
+      { label: 'Active', value: CustomerStatus.ACTIVE, count: s.active, icon: 'check_circle', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
+      { label: 'Rejected', value: CustomerStatus.REJECTED, count: s.rejected, icon: 'cancel', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
+    ];
+  });
 
-  readonly tabs = [
-    { label: 'Pending', value: CustomerStatus.PENDING, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.PENDING).length },
-    { label: 'Verified', value: CustomerStatus.VERIFIED, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.VERIFIED).length },
-    { label: 'Active', value: CustomerStatus.ACTIVE, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.ACTIVE).length },
-    { label: 'Rejected', value: CustomerStatus.REJECTED, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.REJECTED).length },
-  ];
+  readonly tabs = computed(() => {
+    const s = this.store.customerSummary();
+    return [
+      { label: 'Pending', value: CustomerStatus.PENDING, count: s.pending },
+      { label: 'Verified', value: CustomerStatus.VERIFIED, count: s.verified },
+      { label: 'Active', value: CustomerStatus.ACTIVE, count: s.active },
+      { label: 'Rejected', value: CustomerStatus.REJECTED, count: s.rejected },
+    ];
+  });
 
-  readonly pendingList = computed(() => this.all().filter(c => c.status === CustomerStatus.PENDING));
+  readonly pendingList = computed(() =>
+    this.store.customers().filter(c => c.status === CustomerStatus.PENDING) as CustomerRow[]
+  );
 
   readonly filteredCustomers = computed(() => {
-    let data = this.all();
+    let data = this.store.customers() as CustomerRow[];
     if (this.activeTab() !== 'all') data = data.filter(c => c.status === this.activeTab());
     if (this.regionFilter) data = data.filter(c => c.region === this.regionFilter);
     return data;
@@ -268,16 +277,15 @@ export class CustomerVerificationComponent implements OnInit {
   ];
 
   readonly tableActions: TableAction<CustomerRow>[] = [
-    { label: 'Approve', icon: 'verified', condition: (r) => r.status === CustomerStatus.PENDING, handler: (r) => this.approveCustomer(r) },
-    { label: 'Reject', icon: 'cancel', color: '#dc2626', condition: (r) => r.status === CustomerStatus.PENDING, handler: (r) => this.rejectCustomer(r) },
+    { label: 'Approve', icon: 'verified', condition: (r) => r.status === CustomerStatus.PENDING,
+      handler: (r) => this.approveCustomer(r) },
+    { label: 'Reject', icon: 'cancel', color: '#dc2626', condition: (r) => r.status === CustomerStatus.PENDING,
+      handler: (r) => this.rejectCustomer(r) },
     { label: 'View', icon: 'visibility', handler: (r) => console.log('view', r.id) },
   ];
 
   ngOnInit(): void {
-    this.loading.set(true);
-    const first = this.pendingList()[0];
-    if (first) this.selected.set(first);
-    setTimeout(() => this.loading.set(false), 500);
+    this.store.loadCustomers({});
   }
 
   setTab(val: string): void { this.activeTab.set(val); }
@@ -286,13 +294,17 @@ export class CustomerVerificationComponent implements OnInit {
   bulkApprove(): void { console.log('bulk approve'); }
 
   approveCustomer(c: CustomerRow): void {
-    this.all.update(list => list.map(x => x.id === c.id ? { ...x, status: CustomerStatus.VERIFIED, isVerified: true } : x));
-    this.selected.set(this.pendingList()[0] ?? null);
+    this.store.verifyCustomer(c.id, {
+      onSuccess: () => { this.selected.set(this.pendingList()[0] ?? null); },
+      onError: (e) => console.error(e),
+    });
   }
 
   rejectCustomer(c: CustomerRow): void {
-    this.all.update(list => list.map(x => x.id === c.id ? { ...x, status: CustomerStatus.REJECTED } : x));
-    this.selected.set(this.pendingList()[0] ?? null);
+    this.store.rejectCustomer(c.id, '', {
+      onSuccess: () => { this.selected.set(this.pendingList()[0] ?? null); },
+      onError: (e) => console.error(e),
+    });
   }
 
   getKycFields(c: CustomerRow): { label: string; value: string }[] {

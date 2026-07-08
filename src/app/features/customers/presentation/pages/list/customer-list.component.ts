@@ -1,9 +1,9 @@
-import { Component, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
-import { MOCK_CUSTOMERS } from '../../../data/customer.mock';
+import { CustomerStore } from '../../../store/customer.store';
 import { Customer, CustomerStatus, CustomerTier } from '../../../domain/customer.model';
 
 type CustomerRow = Customer & Record<string, unknown>;
@@ -18,7 +18,7 @@ type CustomerRow = Customer & Record<string, unknown>;
         title="Customer Management"
         subtitle="Manage all registered buyers across regions"
         icon="people"
-        [badge]="customers().length"
+        [badge]="store.customers().length"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Customers', url: '/customers' }, { label: 'All Customers' }]"
       >
         <button class="btn btn-secondary btn-sm">
@@ -31,7 +31,7 @@ type CustomerRow = Customer & Record<string, unknown>;
 
       <!-- Stats -->
       <div class="quick-stats stagger-children">
-        @for (stat of stats; track stat.label) {
+        @for (stat of stats(); track stat.label) {
           <div class="quick-stat animate-slide-up">
             <div class="qs-icon" [style.background]="stat.bg">
               <span class="material-symbols-rounded" [style.color]="stat.color">{{ stat.icon }}</span>
@@ -47,7 +47,7 @@ type CustomerRow = Customer & Record<string, unknown>;
       <!-- Filter Bar -->
       <div class="filter-bar">
         <div class="filter-tabs">
-          @for (tab of statusTabs; track tab.value) {
+          @for (tab of statusTabs(); track tab.value) {
             <button class="filter-tab" [class.active]="activeStatus() === tab.value" (click)="setStatus(tab.value)">
               {{ tab.label }} <span class="tab-count">{{ tab.count }}</span>
             </button>
@@ -56,7 +56,7 @@ type CustomerRow = Customer & Record<string, unknown>;
         <div class="filter-right">
           <select class="filter-select" [(ngModel)]="regionFilter" (change)="doFilter()">
             <option value="">All Regions</option>
-            @for (r of regions; track r) { <option [value]="r">{{ r }}</option> }
+            @for (r of regions(); track r) { <option [value]="r">{{ r }}</option> }
           </select>
           <select class="filter-select" [(ngModel)]="tierFilter" (change)="doFilter()">
             <option value="">All Tiers</option>
@@ -69,7 +69,7 @@ type CustomerRow = Customer & Record<string, unknown>;
         [data]="filteredCustomers()"
         [columns]="columns"
         [actions]="actions"
-        [loading]="loading()"
+        [loading]="store.isLoadingCustomers()"
         [selectable]="true"
         [searchable]="true"
         searchPlaceholder="Search customers by name, email, region..."
@@ -125,33 +125,42 @@ type CustomerRow = Customer & Record<string, unknown>;
   `]
 })
 export class CustomerListComponent implements OnInit {
-  readonly customers = signal(MOCK_CUSTOMERS as CustomerRow[]);
-  readonly loading = signal(false);
+  protected readonly store = inject(CustomerStore);
+
   readonly activeStatus = signal('all');
   regionFilter = '';
   tierFilter = '';
 
-  readonly regions = [...new Set(MOCK_CUSTOMERS.map(c => c.region))].sort();
   readonly tiers = Object.values(CustomerTier);
 
-  readonly stats = [
-    { label: 'Total Customers', value: MOCK_CUSTOMERS.length, icon: 'people', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
-    { label: 'Active', value: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.ACTIVE).length, icon: 'person_check', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
-    { label: 'Verified', value: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.VERIFIED).length, icon: 'verified', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
-    { label: 'Pending', value: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.PENDING).length, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
-    { label: 'Suspended', value: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.SUSPENDED).length, icon: 'block', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
-  ];
+  readonly regions = computed(() =>
+    [...new Set(this.store.customers().map(c => c.region))].sort()
+  );
 
-  readonly statusTabs = [
-    { label: 'All', value: 'all', count: MOCK_CUSTOMERS.length },
-    { label: 'Active', value: CustomerStatus.ACTIVE, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.ACTIVE).length },
-    { label: 'Verified', value: CustomerStatus.VERIFIED, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.VERIFIED).length },
-    { label: 'Pending', value: CustomerStatus.PENDING, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.PENDING).length },
-    { label: 'Suspended', value: CustomerStatus.SUSPENDED, count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.SUSPENDED).length },
-  ];
+  readonly stats = computed(() => {
+    const s = this.store.customerSummary();
+    return [
+      { label: 'Total Customers', value: s.total, icon: 'people', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
+      { label: 'Active', value: s.active, icon: 'person_check', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
+      { label: 'Verified', value: s.verified, icon: 'verified', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
+      { label: 'Pending', value: s.pending, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
+      { label: 'Suspended', value: s.suspended, icon: 'block', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
+    ];
+  });
+
+  readonly statusTabs = computed(() => {
+    const s = this.store.customerSummary();
+    return [
+      { label: 'All', value: 'all', count: s.total },
+      { label: 'Active', value: CustomerStatus.ACTIVE, count: s.active },
+      { label: 'Verified', value: CustomerStatus.VERIFIED, count: s.verified },
+      { label: 'Pending', value: CustomerStatus.PENDING, count: s.pending },
+      { label: 'Suspended', value: CustomerStatus.SUSPENDED, count: s.suspended },
+    ];
+  });
 
   readonly filteredCustomers = computed(() => {
-    let data = this.customers();
+    let data = this.store.customers() as CustomerRow[];
     if (this.activeStatus() !== 'all') data = data.filter(c => c.status === this.activeStatus());
     if (this.regionFilter) data = data.filter(c => c.region === this.regionFilter);
     if (this.tierFilter) data = data.filter(c => c.tier === this.tierFilter);
@@ -159,24 +168,15 @@ export class CustomerListComponent implements OnInit {
   });
 
   readonly columns: Column<CustomerRow>[] = [
-    { key: 'id', label: 'ID', width: '110px', sortable: true },
-    { key: 'firstName', label: 'Customer', sortable: true, type: 'avatar' },
-    { key: 'email', label: 'Email' },
-    { key: 'phone', label: 'Phone' },
-    { key: 'region', label: 'Region', sortable: true },
-    { key: 'tier', label: 'Tier', type: 'status', sortable: true,
-      statusMap: {
-        [CustomerTier.BRONZE]: { label: 'Bronze', class: 'badge--neutral' },
-        [CustomerTier.SILVER]: { label: 'Silver', class: 'badge--info' },
-        [CustomerTier.GOLD]: { label: 'Gold', class: 'badge--warning' },
-        [CustomerTier.PLATINUM]: { label: 'Platinum', class: 'badge--success' },
-      }
-    },
-    { key: 'totalOrders', label: 'Orders', type: 'number', align: 'center', sortable: true },
-    { key: 'totalSpent', label: 'Total Spent', type: 'currency', align: 'right', sortable: true },
-    { key: 'rating', label: 'Rating', align: 'center', format: (v) => `${v} ★` },
+    { key: 'firstName', label: 'Customer', sortable: true, width: '180px',
+      format: (_, row) => `${row['firstName']} ${row['lastName']}` },
+    { key: 'email', label: 'Email', width: '210px' },
+    { key: 'phone', label: 'Phone', width: '145px' },
+    { key: 'region', label: 'Region', sortable: true, width: '130px' },
+    { key: 'totalOrders', label: 'Orders', type: 'number', align: 'center', sortable: true, width: '85px' },
+    { key: 'totalSpent', label: 'Total Spent', type: 'currency', align: 'right', sortable: true, width: '130px' },
     {
-      key: 'status', label: 'Status', type: 'status',
+      key: 'status', label: 'Status', type: 'status', align: 'center', width: '115px',
       statusMap: {
         [CustomerStatus.ACTIVE]: { label: 'Active', class: 'badge--success' },
         [CustomerStatus.VERIFIED]: { label: 'Verified', class: 'badge--info' },
@@ -185,22 +185,47 @@ export class CustomerListComponent implements OnInit {
         [CustomerStatus.REJECTED]: { label: 'Rejected', class: 'badge--neutral' },
       }
     },
-    { key: 'joinedDate', label: 'Joined', type: 'date', sortable: true },
+    { key: 'joinedDate', label: 'Joined', type: 'date', align: 'center', sortable: true, width: '110px' },
   ];
 
   readonly actions: TableAction<CustomerRow>[] = [
     { label: 'View Profile', icon: 'person', handler: (row) => console.log('view', row.id) },
     { label: 'Edit', icon: 'edit', handler: (row) => console.log('edit', row.id) },
-    { label: 'Verify', icon: 'verified', condition: (row) => row.status === CustomerStatus.PENDING, handler: (row) => console.log('verify', row.id) },
-    { label: 'Suspend', icon: 'block', color: '#dc2626', condition: (row) => row.status === CustomerStatus.ACTIVE || row.status === CustomerStatus.VERIFIED, handler: (row) => console.log('suspend', row.id) },
+    {
+      label: 'Approve', icon: 'verified_user', color: '#16a34a',
+      condition: (row) => row.status === CustomerStatus.PENDING || row.status === CustomerStatus.REJECTED,
+      handler: (row) => this.approveCustomer(row),
+    },
+    {
+      label: 'Suspend', icon: 'block', color: '#dc2626',
+      condition: (row) => row.status === CustomerStatus.ACTIVE || row.status === CustomerStatus.VERIFIED,
+      handler: (row) => this.store.suspendCustomer(row.id, '', {
+        onSuccess: () => this.store.loadCustomers(this.currentParams()),
+        onError: (e) => console.error(e),
+      }),
+    },
   ];
 
   ngOnInit(): void {
-    this.loading.set(true);
-    setTimeout(() => this.loading.set(false), 600);
+    this.store.loadCustomers({});
   }
 
   setStatus(status: string): void { this.activeStatus.set(status); }
-  doFilter(): void {}
+  doFilter(): void { this.store.loadCustomers(this.currentParams()); }
   addCustomer(): void { console.log('add customer'); }
+
+  currentParams() {
+    return {
+      ...(this.activeStatus() !== 'all' ? { status: this.activeStatus() } : {}),
+      ...(this.regionFilter ? { region: this.regionFilter } : {}),
+      ...(this.tierFilter ? { tier: this.tierFilter } : {}),
+    };
+  }
+
+  approveCustomer(row: CustomerRow): void {
+    this.store.verifyCustomer(row.id, {
+      onSuccess: () => this.store.loadCustomers(this.currentParams()),
+      onError: (e) => console.error('Approve failed:', e),
+    });
+  }
 }

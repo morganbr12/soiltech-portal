@@ -1,8 +1,8 @@
-import { Component, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
-import { MOCK_CUSTOMERS } from '../../../data/customer.mock';
+import { CustomerStore } from '../../../store/customer.store';
 import { CustomerTier, CustomerStatus } from '../../../domain/customer.model';
 
 interface NotifTemplate {
@@ -11,16 +11,6 @@ interface NotifTemplate {
   body: string;
   category: string;
   icon: string;
-}
-
-interface SentNotif {
-  id: string;
-  title: string;
-  target: string;
-  sent: number;
-  delivered: number;
-  opened: number;
-  sentAt: string;
 }
 
 @Component({
@@ -64,7 +54,7 @@ interface SentNotif {
           <div class="form-section">
             <div class="form-label">Target Audience</div>
             <div class="audience-chips">
-              @for (a of audiences; track a.value) {
+              @for (a of audiences(); track a.value) {
                 <div class="audience-chip" [class.selected]="selectedAudience() === a.value" (click)="selectAudience(a.value)">
                   <span class="material-symbols-rounded">{{ a.icon }}</span>
                   <span>{{ a.label }}</span>
@@ -136,9 +126,9 @@ interface SentNotif {
               <span class="material-symbols-rounded">people</span>
               {{ recipientCount() }} recipients
             </div>
-            <button class="btn btn-primary" [disabled]="!canSend()" (click)="sendNotification()">
+            <button class="btn btn-primary" [disabled]="!canSend() || store.isSendingNotif()" (click)="sendNotification()">
               <span class="material-symbols-rounded">send</span>
-              {{ sendOption === 'schedule' ? 'Schedule' : 'Send Now' }}
+              {{ store.isSendingNotif() ? 'Sending...' : (sendOption === 'schedule' ? 'Schedule' : 'Send Now') }}
             </button>
           </div>
         </div>
@@ -186,7 +176,10 @@ interface SentNotif {
           <!-- Sent Stats -->
           <h3 class="panel-title" style="margin-top:24px">Recent Campaigns</h3>
           <div class="sent-list">
-            @for (s of sentNotifs; track s.id) {
+            @if (store.isLoadingNotifs()) {
+              <p style="font-size:0.875rem;color:var(--color-text-muted);padding:12px 0">Loading history...</p>
+            }
+            @for (s of store.notifHistory(); track s.id) {
               <div class="sent-item">
                 <div class="sent-info">
                   <div class="sent-title">{{ s.title }}</div>
@@ -206,7 +199,7 @@ interface SentNotif {
                     <div class="metric-label">Opened</div>
                   </div>
                   <div class="metric">
-                    <div class="metric-value" style="color:#7c3aed">{{ Math.round(s.opened / s.sent * 100) }}%</div>
+                    <div class="metric-value" style="color:#7c3aed">{{ s.sent > 0 ? Math.round(s.opened / s.sent * 100) : 0 }}%</div>
                     <div class="metric-label">Open Rate</div>
                   </div>
                 </div>
@@ -280,6 +273,7 @@ interface SentNotif {
   `]
 })
 export class CustomerNotificationsComponent implements OnInit {
+  protected readonly store = inject(CustomerStore);
   readonly Math = Math;
 
   notifTitle = '';
@@ -290,13 +284,16 @@ export class CustomerNotificationsComponent implements OnInit {
   readonly selectedAudience = signal('all');
   readonly showHistory = signal(false);
 
-  readonly audiences = [
-    { label: 'All Customers', value: 'all', icon: 'people', count: MOCK_CUSTOMERS.length },
-    { label: 'Active', value: 'active', icon: 'person_check', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.ACTIVE).length },
-    { label: 'Inactive 30d', value: 'inactive', icon: 'person_off', count: Math.floor(MOCK_CUSTOMERS.length * 0.18) },
-    { label: 'Gold+', value: 'gold', icon: 'star', count: MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.GOLD || c.tier === CustomerTier.PLATINUM).length },
-    { label: 'Unverified', value: 'unverified', icon: 'pending', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.PENDING).length },
-  ];
+  readonly audiences = computed(() => {
+    const s = this.store.customerSummary();
+    return [
+      { label: 'All Customers', value: 'all', icon: 'people', count: s.total },
+      { label: 'Active', value: 'active', icon: 'person_check', count: s.active },
+      { label: 'Inactive 30d', value: 'inactive', icon: 'person_off', count: Math.floor(s.total * 0.18) },
+      { label: 'Gold+', value: 'gold', icon: 'star', count: 0 },
+      { label: 'Unverified', value: 'unverified', icon: 'pending', count: s.pending },
+    ];
+  });
 
   readonly channels = [
     { label: 'Push', value: 'push', icon: 'notifications' },
@@ -315,34 +312,36 @@ export class CustomerNotificationsComponent implements OnInit {
 
   readonly homeIcons = [1, 2, 3, 4, 5, 6, 7, 8];
 
-  readonly sentNotifs: SentNotif[] = [
-    { id: 's1', title: 'Weekend Sale Alert', target: 'All Customers', sent: 80, delivered: 76, opened: 42, sentAt: '2 days ago' },
-    { id: 's2', title: 'Verify Your Account', target: 'Unverified (10)', sent: 10, delivered: 10, opened: 7, sentAt: '5 days ago' },
-    { id: 's3', title: 'Gold Tier Rewards', target: 'Gold Customers', sent: 15, delivered: 15, opened: 12, sentAt: '1 week ago' },
-    { id: 's4', title: 'New Cocoa Stock', target: 'Active Customers', sent: 45, delivered: 43, opened: 28, sentAt: '2 weeks ago' },
-  ];
-
   readonly stats = [
     { label: 'Total Sent', value: '12,450', icon: 'send', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
     { label: 'Avg Delivery', value: '96.2%', icon: 'local_post_office', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
     { label: 'Avg Open Rate', value: '62.5%', icon: 'mark_email_read', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
-    { label: 'Active Subscribers', value: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.ACTIVE).length.toString(), icon: 'notifications_active', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
+    { label: 'Active Subscribers', value: '—', icon: 'notifications_active', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
   ];
 
-  readonly recipientCount = () => {
+  readonly recipientCount = computed(() => {
+    const s = this.store.customerSummary();
     switch (this.selectedAudience()) {
-      case 'all': return MOCK_CUSTOMERS.length;
-      case 'active': return MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.ACTIVE).length;
-      case 'inactive': return Math.floor(MOCK_CUSTOMERS.length * 0.18);
-      case 'gold': return MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.GOLD || c.tier === CustomerTier.PLATINUM).length;
-      case 'unverified': return MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.PENDING).length;
+      case 'all': return s.total;
+      case 'active': return s.active;
+      case 'inactive': return Math.floor(s.total * 0.18);
+      case 'gold': return 0;
+      case 'unverified': return s.pending;
       default: return 0;
     }
-  };
+  });
 
-  readonly canSend = () => this.notifTitle.trim().length > 0 && this.notifBody.trim().length > 0 && this.selectedChannels.length > 0;
+  readonly canSend = computed(() =>
+    this.notifTitle.trim().length > 0 && this.notifBody.trim().length > 0 && this.selectedChannels.length > 0
+  );
+
+  ngOnInit(): void {
+    this.store.loadCustomers({});
+    this.store.loadNotifHistory();
+  }
 
   selectAudience(val: string): void { this.selectedAudience.set(val); }
+
   toggleChannel(val: string): void {
     if (this.selectedChannels.includes(val)) {
       this.selectedChannels = this.selectedChannels.filter(c => c !== val);
@@ -350,9 +349,29 @@ export class CustomerNotificationsComponent implements OnInit {
       this.selectedChannels = [...this.selectedChannels, val];
     }
   }
+
   applyTemplate(t: NotifTemplate): void { this.notifTitle = t.title; this.notifBody = t.body; }
   toggleHistory(): void { this.showHistory.update(v => !v); }
-  sendNotification(): void { if (this.canSend()) { this.notifTitle = ''; this.notifBody = ''; } }
 
-  ngOnInit(): void {}
+  sendNotification(): void {
+    if (!this.canSend()) return;
+    this.store.sendNotification(
+      {
+        title: this.notifTitle,
+        body: this.notifBody,
+        target: this.selectedAudience(),
+        category: 'general',
+        channels: this.selectedChannels,
+        scheduledAt: this.sendOption === 'schedule' ? this.scheduledAt : undefined,
+      },
+      {
+        onSuccess: () => {
+          this.notifTitle = '';
+          this.notifBody = '';
+          this.store.loadNotifHistory();
+        },
+        onError: (e) => console.error(e),
+      }
+    );
+  }
 }

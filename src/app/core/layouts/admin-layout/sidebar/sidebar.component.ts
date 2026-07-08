@@ -68,7 +68,7 @@ const NAV_ITEMS: NavItem[] = [
 
       <!-- Navigation -->
       <nav class="sidebar__nav">
-        @for (item of visibleItems(); track item.label) {
+        @for (item of visibleItems(); track $index) {
           @if (item.divider) {
             <div class="nav-divider"></div>
           } @else {

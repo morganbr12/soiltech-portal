@@ -1,8 +1,11 @@
-import { Component, inject, output, signal } from '@angular/core';
+import { Component, inject, output, signal, computed, HostListener, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
 import { AgentStore } from '../../../store/agent.store';
 import { CreateAgentRequest } from '../../../domain/agent.model';
+import { LbcService } from '../../../../lbc/services/lbc.service';
+
+interface LbcOption { id: string; name: string; code: string; }
 
 function passwordMatch(control: AbstractControl): ValidationErrors | null {
   const pw = control.get('password')?.value;
@@ -86,14 +89,41 @@ const GHANA_REGIONS = [
             </div>
           </div>
 
-          <!-- LBC ID (full width) -->
+          <!-- LBC searchable dropdown -->
           <div class="field-group">
-            <label class="field-label required" for="lbcId">LBC ID</label>
-            <input id="lbcId" class="field-input" type="text" formControlName="lbcId"
-              placeholder="e.g. LBC-001" [class.invalid]="invalid('lbcId')">
-            @if (invalid('lbcId')) {
-              <span class="field-error">LBC ID is required</span>
-            }
+            <label class="field-label required">LBC</label>
+            <div class="searchable-select" [class.open]="showLbcDropdown()" (click)="$event.stopPropagation()">
+              <button type="button" class="select-trigger" [class.invalid]="invalid('lbcId')" (click)="toggleLbcDropdown()">
+                <span [class.placeholder]="!selectedLbc()">
+                  {{ selectedLbc() ? selectedLbc()!.name + ' · ' + selectedLbc()!.code : 'Select LBC…' }}
+                </span>
+                <span class="material-symbols-rounded">{{ showLbcDropdown() ? 'expand_less' : 'expand_more' }}</span>
+              </button>
+              @if (showLbcDropdown()) {
+                <div class="select-panel">
+                  <div class="select-search-wrap">
+                    <span class="material-symbols-rounded search-icon">search</span>
+                    <input class="select-search-input" [value]="lbcSearch()" (input)="onLbcSearch($event)"
+                      placeholder="Search by name or code…" autofocus>
+                  </div>
+                  <div class="select-list">
+                    @if (lbcsLoading()) {
+                      <div class="select-status"><span class="spinner-sm"></span> Loading…</div>
+                    } @else if (filteredLbcs().length === 0) {
+                      <div class="select-status">No LBCs found</div>
+                    } @else {
+                      @for (lbc of filteredLbcs(); track lbc.id) {
+                        <button type="button" class="select-item" [class.selected]="selectedLbc()?.id === lbc.id" (click)="selectLbc(lbc)">
+                          <span class="select-item-main">{{ lbc.name }}</span>
+                          <span class="select-item-sub">{{ lbc.code }}</span>
+                        </button>
+                      }
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+            @if (invalid('lbcId')) { <span class="field-error">LBC is required</span> }
           </div>
 
           <!-- Region + District (2-col) -->
@@ -341,6 +371,21 @@ const GHANA_REGIONS = [
 
     select.field-input { cursor: pointer; appearance: auto; }
 
+    .searchable-select { position: relative; }
+    .select-trigger { width: 100%; padding: 10px 14px; border: 1.5px solid var(--color-border); border-radius: var(--radius-sm); font-size: 0.9375rem; font-family: inherit; color: var(--color-text-primary); background: var(--color-surface); cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; transition: border-color var(--transition-fast), box-shadow var(--transition-fast); .material-symbols-rounded { font-size: 18px; color: var(--color-text-muted); flex-shrink: 0; } &.invalid { border-color: var(--color-error); } }
+    .searchable-select.open .select-trigger { border-color: #0284c7; box-shadow: 0 0 0 3px rgba(2,132,199,0.12); }
+    .placeholder { color: var(--color-text-muted); }
+    .select-panel { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-xl); z-index: 200; overflow: hidden; animation: dd-in 120ms cubic-bezier(0.16,1,0.3,1); }
+    @keyframes dd-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+    .select-search-wrap { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--color-border-light); .search-icon { font-size: 18px; color: var(--color-text-muted); } }
+    .select-search-input { flex: 1; border: none; outline: none; font-size: 0.875rem; font-family: inherit; color: var(--color-text-primary); background: transparent; &::placeholder { color: var(--color-text-muted); } }
+    .select-list { max-height: 210px; overflow-y: auto; padding: 4px; }
+    .select-status { padding: 16px; text-align: center; font-size: 0.875rem; color: var(--color-text-muted); display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .select-item { width: 100%; padding: 8px 12px; border: none; background: transparent; cursor: pointer; text-align: left; border-radius: 6px; transition: background var(--transition-fast); display: flex; align-items: center; justify-content: space-between; gap: 8px; &:hover { background: var(--color-surface-2); } &.selected { background: rgba(2,132,199,0.08); } }
+    .select-item-main { font-size: 0.875rem; font-weight: 500; color: var(--color-text-primary); }
+    .select-item-sub { font-size: 0.75rem; color: var(--color-text-muted); flex-shrink: 0; }
+    .spinner-sm { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--color-border); border-top-color: #0284c7; border-radius: 50%; animation: spin 0.65s linear infinite; }
+
     .password-wrap {
       position: relative;
       display: flex;
@@ -414,16 +459,31 @@ const GHANA_REGIONS = [
     }
   `],
 })
-export class RegisterAgentModalComponent {
+export class RegisterAgentModalComponent implements OnInit {
   readonly closed = output<void>();
   readonly registered = output<void>();
 
+  private readonly lbcService = inject(LbcService);
   readonly store = inject(AgentStore);
   readonly regions = GHANA_REGIONS;
   readonly isSaving = signal(false);
   readonly errorMsg = signal('');
   readonly showPassword = signal(false);
   readonly showConfirm = signal(false);
+
+  readonly lbcs            = signal<LbcOption[]>([]);
+  readonly lbcsLoading     = signal(false);
+  readonly lbcSearch       = signal('');
+  readonly selectedLbc     = signal<LbcOption | null>(null);
+  readonly showLbcDropdown = signal(false);
+
+  readonly filteredLbcs = computed(() => {
+    const q = this.lbcSearch().toLowerCase();
+    if (!q) return this.lbcs();
+    return this.lbcs().filter(l =>
+      l.name.toLowerCase().includes(q) || l.code.toLowerCase().includes(q)
+    );
+  });
 
   private readonly fb = inject(FormBuilder);
 
@@ -438,6 +498,37 @@ export class RegisterAgentModalComponent {
     password:        ['', [Validators.required, Validators.minLength(8)]],
     confirmPassword: ['', Validators.required],
   }, { validators: passwordMatch });
+
+  @HostListener('document:click')
+  closeLbcDropdown(): void {
+    this.showLbcDropdown.set(false);
+  }
+
+  ngOnInit(): void {
+    this.lbcsLoading.set(true);
+    this.lbcService.list({ limit: 200 }).subscribe({
+      next: (res) => {
+        this.lbcs.set(res.data.map(l => ({ id: l.id, name: l.name, code: l.code })));
+        this.lbcsLoading.set(false);
+      },
+      error: () => this.lbcsLoading.set(false),
+    });
+  }
+
+  toggleLbcDropdown(): void {
+    this.showLbcDropdown.update(v => !v);
+    this.lbcSearch.set('');
+  }
+
+  selectLbc(lbc: LbcOption): void {
+    this.selectedLbc.set(lbc);
+    this.showLbcDropdown.set(false);
+    this.form.patchValue({ lbcId: lbc.id });
+  }
+
+  onLbcSearch(e: Event): void {
+    this.lbcSearch.set((e.target as HTMLInputElement).value);
+  }
 
   invalid(field: string): boolean {
     const ctrl = this.form.get(field);

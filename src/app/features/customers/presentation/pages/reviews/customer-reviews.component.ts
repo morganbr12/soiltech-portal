@@ -1,9 +1,9 @@
-import { Component, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
-import { MOCK_CUSTOMER_REVIEWS } from '../../../data/customer.mock';
+import { CustomerStore } from '../../../store/customer.store';
 import { CustomerReview, ReviewStatus } from '../../../domain/customer.model';
 
 type ReviewRow = CustomerReview & Record<string, unknown>;
@@ -18,7 +18,7 @@ type ReviewRow = CustomerReview & Record<string, unknown>;
         title="Customer Reviews"
         subtitle="Moderate and manage buyer feedback and ratings"
         icon="star"
-        [badge]="pendingCount"
+        [badge]="store.reviewSummary().pending"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Customers', url: '/customers' }, { label: 'Reviews' }]"
       >
         <button class="btn btn-ghost btn-sm" (click)="bulkApprove()">
@@ -28,7 +28,7 @@ type ReviewRow = CustomerReview & Record<string, unknown>;
 
       <!-- Stats -->
       <div class="quick-stats stagger-children">
-        @for (stat of stats; track stat.label) {
+        @for (stat of stats(); track stat.label) {
           <div class="quick-stat animate-slide-up">
             <div class="qs-icon" [style.background]="stat.bg">
               <span class="material-symbols-rounded" [style.color]="stat.color">{{ stat.icon }}</span>
@@ -44,16 +44,16 @@ type ReviewRow = CustomerReview & Record<string, unknown>;
       <!-- Rating Breakdown -->
       <div class="rating-breakdown">
         <div class="rating-summary">
-          <div class="rating-big">{{ avgRating.toFixed(1) }}</div>
+          <div class="rating-big">{{ avgRating() }}</div>
           <div class="rating-stars">
             @for (s of starRange; track s) {
               <span class="material-symbols-rounded" style="color:#f59e0b;font-size:24px;font-variation-settings:'FILL' 1">star</span>
             }
           </div>
-          <div class="rating-total">Based on {{ reviews().length }} reviews</div>
+          <div class="rating-total">Based on {{ store.reviews().length }} reviews</div>
         </div>
         <div class="rating-bars">
-          @for (r of ratingDist; track r.star) {
+          @for (r of ratingDist(); track r.star) {
             <div class="rating-bar-row">
               <span class="rating-bar-star">{{ r.star }} ★</span>
               <div class="rating-bar-wrap">
@@ -68,7 +68,7 @@ type ReviewRow = CustomerReview & Record<string, unknown>;
       <!-- Filters -->
       <div class="filter-bar">
         <div class="filter-tabs">
-          @for (tab of statusTabs; track tab.value) {
+          @for (tab of statusTabs(); track tab.value) {
             <button class="filter-tab" [class.active]="activeStatus() === tab.value" (click)="setStatus(tab.value)">
               {{ tab.label }} <span class="tab-count">{{ tab.count }}</span>
             </button>
@@ -85,7 +85,7 @@ type ReviewRow = CustomerReview & Record<string, unknown>;
           </select>
           <select class="filter-select" [(ngModel)]="regionFilter" (change)="doFilter()">
             <option value="">All Regions</option>
-            @for (r of regions; track r) { <option [value]="r">{{ r }}</option> }
+            @for (r of regions(); track r) { <option [value]="r">{{ r }}</option> }
           </select>
         </div>
       </div>
@@ -94,7 +94,7 @@ type ReviewRow = CustomerReview & Record<string, unknown>;
         [data]="filteredReviews()"
         [columns]="columns"
         [actions]="actions"
-        [loading]="loading()"
+        [loading]="store.isLoadingReviews()"
         [selectable]="true"
         [searchable]="true"
         searchPlaceholder="Search reviews by customer, comment, target..."
@@ -134,44 +134,58 @@ type ReviewRow = CustomerReview & Record<string, unknown>;
   `]
 })
 export class CustomerReviewsComponent implements OnInit {
-  readonly reviews = signal(MOCK_CUSTOMER_REVIEWS as ReviewRow[]);
-  readonly loading = signal(false);
+  protected readonly store = inject(CustomerStore);
+
   readonly activeStatus = signal('all');
   typeFilter = '';
   regionFilter = '';
 
-  readonly regions = [...new Set(MOCK_CUSTOMER_REVIEWS.map(r => r.region))].sort();
-  readonly pendingCount = MOCK_CUSTOMER_REVIEWS.filter(r => r.status === ReviewStatus.PENDING).length;
-
-  readonly avgRating = MOCK_CUSTOMER_REVIEWS.reduce((s, r) => s + r.rating, 0) / MOCK_CUSTOMER_REVIEWS.length;
-
   readonly starRange = [1, 2, 3, 4, 5];
 
-  readonly ratingDist = [5, 4, 3, 2, 1].map(star => {
-    const count = MOCK_CUSTOMER_REVIEWS.filter(r => r.rating === star).length;
-    const pct = Math.round(count / MOCK_CUSTOMER_REVIEWS.length * 100);
-    const colors: Record<number, string> = { 5: '#16a34a', 4: '#65a30d', 3: '#f59e0b', 2: '#ea580c', 1: '#dc2626' };
-    return { star, count, pct, color: colors[star] };
+  readonly regions = computed(() =>
+    [...new Set(this.store.reviews().map(r => r.region))].sort()
+  );
+
+  readonly avgRating = computed(() => {
+    const reviews = this.store.reviews();
+    if (!reviews.length) return this.store.reviewSummary().avgRating.toFixed(1);
+    return (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1);
   });
 
-  readonly stats = [
-    { label: 'Total Reviews', value: MOCK_CUSTOMER_REVIEWS.length, icon: 'reviews', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
-    { label: 'Approved', value: MOCK_CUSTOMER_REVIEWS.filter(r => r.status === ReviewStatus.APPROVED).length, icon: 'thumb_up', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
-    { label: 'Pending', value: MOCK_CUSTOMER_REVIEWS.filter(r => r.status === ReviewStatus.PENDING).length, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
-    { label: 'Flagged', value: MOCK_CUSTOMER_REVIEWS.filter(r => r.status === ReviewStatus.FLAGGED).length, icon: 'flag', color: '#ea580c', bg: 'rgba(234,88,12,0.1)' },
-    { label: 'Avg Rating', value: this.avgRating.toFixed(1) + ' ★', icon: 'star', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
-  ];
+  readonly ratingDist = computed(() => {
+    const reviews = this.store.reviews();
+    const total = reviews.length || 1;
+    const colors: Record<number, string> = { 5: '#16a34a', 4: '#65a30d', 3: '#f59e0b', 2: '#ea580c', 1: '#dc2626' };
+    return [5, 4, 3, 2, 1].map(star => {
+      const count = reviews.filter(r => r.rating === star).length;
+      return { star, count, pct: Math.round(count / total * 100), color: colors[star] };
+    });
+  });
 
-  readonly statusTabs = [
-    { label: 'All', value: 'all', count: MOCK_CUSTOMER_REVIEWS.length },
-    { label: 'Pending', value: ReviewStatus.PENDING, count: MOCK_CUSTOMER_REVIEWS.filter(r => r.status === ReviewStatus.PENDING).length },
-    { label: 'Approved', value: ReviewStatus.APPROVED, count: MOCK_CUSTOMER_REVIEWS.filter(r => r.status === ReviewStatus.APPROVED).length },
-    { label: 'Flagged', value: ReviewStatus.FLAGGED, count: MOCK_CUSTOMER_REVIEWS.filter(r => r.status === ReviewStatus.FLAGGED).length },
-    { label: 'Rejected', value: ReviewStatus.REJECTED, count: MOCK_CUSTOMER_REVIEWS.filter(r => r.status === ReviewStatus.REJECTED).length },
-  ];
+  readonly stats = computed(() => {
+    const s = this.store.reviewSummary();
+    return [
+      { label: 'Total Reviews', value: s.total, icon: 'reviews', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
+      { label: 'Approved', value: s.approved, icon: 'thumb_up', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
+      { label: 'Pending', value: s.pending, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
+      { label: 'Flagged', value: s.flagged, icon: 'flag', color: '#ea580c', bg: 'rgba(234,88,12,0.1)' },
+      { label: 'Avg Rating', value: this.avgRating() + ' ★', icon: 'star', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+    ];
+  });
+
+  readonly statusTabs = computed(() => {
+    const s = this.store.reviewSummary();
+    return [
+      { label: 'All', value: 'all', count: s.total },
+      { label: 'Pending', value: ReviewStatus.PENDING, count: s.pending },
+      { label: 'Approved', value: ReviewStatus.APPROVED, count: s.approved },
+      { label: 'Flagged', value: ReviewStatus.FLAGGED, count: s.flagged },
+      { label: 'Rejected', value: ReviewStatus.REJECTED, count: s.rejected },
+    ];
+  });
 
   readonly filteredReviews = computed(() => {
-    let data = this.reviews();
+    let data = this.store.reviews() as ReviewRow[];
     if (this.activeStatus() !== 'all') data = data.filter(r => r.status === this.activeStatus());
     if (this.typeFilter) data = data.filter(r => r.targetType === this.typeFilter);
     if (this.regionFilter) data = data.filter(r => r.region === this.regionFilter);
@@ -198,28 +212,36 @@ export class CustomerReviewsComponent implements OnInit {
   ];
 
   readonly actions: TableAction<ReviewRow>[] = [
-    { label: 'Approve', icon: 'thumb_up', condition: (r) => r.status === ReviewStatus.PENDING || r.status === ReviewStatus.FLAGGED, handler: (r) => this.approve(r) },
-    { label: 'Flag', icon: 'flag', color: '#ea580c', condition: (r) => r.status === ReviewStatus.APPROVED, handler: (r) => this.flag(r) },
-    { label: 'Delete', icon: 'delete', color: '#dc2626', handler: (r) => this.delete(r) },
+    { label: 'Approve', icon: 'thumb_up',
+      condition: (r) => r.status === ReviewStatus.PENDING || r.status === ReviewStatus.FLAGGED,
+      handler: (r) => this.approve(r) },
+    { label: 'Flag', icon: 'flag', color: '#ea580c',
+      condition: (r) => r.status === ReviewStatus.APPROVED,
+      handler: (r) => this.flag(r) },
+    { label: 'Delete', icon: 'delete', color: '#dc2626', handler: (r) => this.deleteReview(r) },
   ];
 
   ngOnInit(): void {
-    this.loading.set(true);
-    setTimeout(() => this.loading.set(false), 600);
+    this.store.loadReviews({});
   }
 
   setStatus(s: string): void { this.activeStatus.set(s); }
   doFilter(): void {}
+
   bulkApprove(): void {
-    this.reviews.update(list => list.map(r => r.status === ReviewStatus.PENDING ? { ...r, status: ReviewStatus.APPROVED } : r));
+    const pending = this.store.reviews().filter(r => r.status === ReviewStatus.PENDING);
+    pending.forEach(r => this.store.approveReview(r.id, { onSuccess: () => {}, onError: (e) => console.error(e) }));
   }
+
   approve(r: ReviewRow): void {
-    this.reviews.update(list => list.map(x => x.id === r.id ? { ...x, status: ReviewStatus.APPROVED } : x));
+    this.store.approveReview(r.id, { onSuccess: () => {}, onError: (e) => console.error(e) });
   }
+
   flag(r: ReviewRow): void {
-    this.reviews.update(list => list.map(x => x.id === r.id ? { ...x, status: ReviewStatus.FLAGGED } : x));
+    this.store.flagReview(r.id, { onSuccess: () => {}, onError: (e) => console.error(e) });
   }
-  delete(r: ReviewRow): void {
-    this.reviews.update(list => list.filter(x => x.id !== r.id));
+
+  deleteReview(r: ReviewRow): void {
+    this.store.deleteReview(r.id, { onSuccess: () => {}, onError: (e) => console.error(e) });
   }
 }

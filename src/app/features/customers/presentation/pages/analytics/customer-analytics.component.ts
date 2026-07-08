@@ -1,9 +1,9 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { NgApexchartsModule } from 'ng-apexcharts';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
-import { MOCK_CUSTOMERS, MOCK_CUSTOMER_ORDERS } from '../../../data/customer.mock';
-import { CustomerTier, CustomerStatus } from '../../../domain/customer.model';
+import { CustomerStore } from '../../../store/customer.store';
+import { CustomerTier } from '../../../domain/customer.model';
 
 @Component({
   selector: 'app-customer-analytics',
@@ -59,16 +59,16 @@ import { CustomerTier, CustomerStatus } from '../../../domain/customer.model';
         <div class="chart-card" style="max-width:360px;flex-shrink:0">
           <h3 class="chart-title">Customer Tier Distribution</h3>
           <apx-chart
-            [series]="tierChart.series"
-            [chart]="tierChart.chart"
-            [labels]="tierChart.labels"
-            [colors]="tierChart.colors"
-            [legend]="tierChart.legend"
-            [dataLabels]="tierChart.dataLabels"
-            [plotOptions]="tierChart.plotOptions"
+            [series]="tierChart().series"
+            [chart]="tierChart().chart"
+            [labels]="tierChart().labels"
+            [colors]="tierChart().colors"
+            [legend]="tierChart().legend"
+            [dataLabels]="tierChart().dataLabels"
+            [plotOptions]="tierChart().plotOptions"
           />
           <div class="tier-legend">
-            @for (t of tierLegend; track t.label) {
+            @for (t of tierLegend(); track t.label) {
               <div class="tier-row">
                 <div class="tier-dot" [style.background]="t.color"></div>
                 <span class="tier-label">{{ t.label }}</span>
@@ -186,6 +186,8 @@ import { CustomerTier, CustomerStatus } from '../../../domain/customer.model';
   `]
 })
 export class CustomerAnalyticsComponent implements OnInit {
+  protected readonly store = inject(CustomerStore);
+
   readonly kpis = [
     { label: 'Customer Lifetime Value', value: 'GHS 12,450', icon: 'person_celebrate', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)', trend: '+18% YoY', trendColor: '#16a34a', trendIcon: 'trending_up' },
     { label: 'Retention Rate', value: '74.2%', icon: 'loyalty', color: '#0284c7', bg: 'rgba(2,132,199,0.1)', trend: '+3.1% MoM', trendColor: '#16a34a', trendIcon: 'trending_up' },
@@ -209,22 +211,30 @@ export class CustomerAnalyticsComponent implements OnInit {
     legend: { position: 'top' as const },
   };
 
-  readonly tierLegend = [
-    { label: 'Platinum', count: MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.PLATINUM).length, color: '#7c3aed', pct: Math.round(MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.PLATINUM).length / MOCK_CUSTOMERS.length * 100) },
-    { label: 'Gold', count: MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.GOLD).length, color: '#f59e0b', pct: Math.round(MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.GOLD).length / MOCK_CUSTOMERS.length * 100) },
-    { label: 'Silver', count: MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.SILVER).length, color: '#94a3b8', pct: Math.round(MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.SILVER).length / MOCK_CUSTOMERS.length * 100) },
-    { label: 'Bronze', count: MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.BRONZE).length, color: '#b45309', pct: Math.round(MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.BRONZE).length / MOCK_CUSTOMERS.length * 100) },
-  ];
+  readonly tierLegend = computed(() => {
+    const customers = this.store.customers();
+    const total = customers.length || 1;
+    const count = (tier: CustomerTier) => customers.filter(c => c.tier === tier).length;
+    return [
+      { label: 'Platinum', count: count(CustomerTier.PLATINUM), color: '#7c3aed', pct: Math.round(count(CustomerTier.PLATINUM) / total * 100) },
+      { label: 'Gold',     count: count(CustomerTier.GOLD),     color: '#f59e0b', pct: Math.round(count(CustomerTier.GOLD)     / total * 100) },
+      { label: 'Silver',   count: count(CustomerTier.SILVER),   color: '#94a3b8', pct: Math.round(count(CustomerTier.SILVER)   / total * 100) },
+      { label: 'Bronze',   count: count(CustomerTier.BRONZE),   color: '#b45309', pct: Math.round(count(CustomerTier.BRONZE)   / total * 100) },
+    ];
+  });
 
-  readonly tierChart = {
-    series: this.tierLegend.map(t => t.count),
-    chart: { type: 'donut' as const, height: 220 },
-    labels: this.tierLegend.map(t => t.label),
-    colors: this.tierLegend.map(t => t.color),
-    legend: { show: false },
-    dataLabels: { enabled: false },
-    plotOptions: { pie: { donut: { size: '72%' } } },
-  };
+  readonly tierChart = computed(() => {
+    const legend = this.tierLegend();
+    return {
+      series: legend.map(t => t.count),
+      chart: { type: 'donut' as const, height: 220 },
+      labels: legend.map(t => t.label),
+      colors: legend.map(t => t.color),
+      legend: { show: false },
+      dataLabels: { enabled: false },
+      plotOptions: { pie: { donut: { size: '72%' } } },
+    };
+  });
 
   readonly cohortChart = {
     series: [{ name: 'Customers', data: [22, 18, 15, 12, 8, 5] }],
@@ -270,5 +280,7 @@ export class CustomerAnalyticsComponent implements OnInit {
     grid: { borderColor: 'var(--color-border-light)', strokeDashArray: 4 },
   };
 
-  ngOnInit(): void {}
+  ngOnInit(): void {
+    this.store.loadCustomers({});
+  }
 }

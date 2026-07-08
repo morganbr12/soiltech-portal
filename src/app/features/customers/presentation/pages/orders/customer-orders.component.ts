@@ -1,9 +1,9 @@
-import { Component, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
-import { MOCK_CUSTOMER_ORDERS } from '../../../data/customer.mock';
+import { CustomerStore } from '../../../store/customer.store';
 import { CustomerOrder, OrderStatus } from '../../../domain/customer.model';
 
 type OrderRow = CustomerOrder & Record<string, unknown>;
@@ -18,7 +18,7 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
         title="Customer Orders"
         subtitle="Manage and track all buyer orders across the supply chain"
         icon="shopping_bag"
-        [badge]="orders().length"
+        [badge]="store.orders().length"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Customers', url: '/customers' }, { label: 'Orders' }]"
       >
         <button class="btn btn-secondary btn-sm">
@@ -31,7 +31,7 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
 
       <!-- Stats -->
       <div class="quick-stats stagger-children">
-        @for (stat of stats; track stat.label) {
+        @for (stat of stats(); track stat.label) {
           <div class="quick-stat animate-slide-up">
             <div class="qs-icon" [style.background]="stat.bg">
               <span class="material-symbols-rounded" [style.color]="stat.color">{{ stat.icon }}</span>
@@ -47,7 +47,7 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
       <!-- Filter Bar -->
       <div class="filter-bar">
         <div class="filter-tabs">
-          @for (tab of statusTabs; track tab.value) {
+          @for (tab of statusTabs(); track tab.value) {
             <button class="filter-tab" [class.active]="activeStatus() === tab.value" (click)="setStatus(tab.value)">
               {{ tab.label }} <span class="tab-count">{{ tab.count }}</span>
             </button>
@@ -62,7 +62,7 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
           </select>
           <select class="filter-select" [(ngModel)]="regionFilter" (change)="doFilter()">
             <option value="">All Regions</option>
-            @for (r of regions; track r) { <option [value]="r">{{ r }}</option> }
+            @for (r of regions(); track r) { <option [value]="r">{{ r }}</option> }
           </select>
         </div>
       </div>
@@ -71,7 +71,7 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
         [data]="filteredOrders()"
         [columns]="columns"
         [actions]="actions"
-        [loading]="loading()"
+        [loading]="store.isLoadingOrders()"
         [selectable]="true"
         [searchable]="true"
         searchPlaceholder="Search by customer, produce, order ID..."
@@ -98,34 +98,42 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
   `]
 })
 export class CustomerOrdersComponent implements OnInit {
-  readonly orders = signal(MOCK_CUSTOMER_ORDERS as OrderRow[]);
-  readonly loading = signal(false);
+  protected readonly store = inject(CustomerStore);
+
   readonly activeStatus = signal('all');
   payFilter = '';
   regionFilter = '';
 
-  readonly regions = [...new Set(MOCK_CUSTOMER_ORDERS.map(o => o.region))].sort();
+  readonly regions = computed(() =>
+    [...new Set(this.store.orders().map(o => o.region))].sort()
+  );
 
-  readonly stats = [
-    { label: 'Total Orders', value: MOCK_CUSTOMER_ORDERS.length, icon: 'shopping_bag', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
-    { label: 'Delivered', value: MOCK_CUSTOMER_ORDERS.filter(o => o.status === OrderStatus.DELIVERED).length, icon: 'local_shipping', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
-    { label: 'Processing', value: MOCK_CUSTOMER_ORDERS.filter(o => o.status === OrderStatus.PROCESSING || o.status === OrderStatus.CONFIRMED).length, icon: 'autorenew', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
-    { label: 'Pending', value: MOCK_CUSTOMER_ORDERS.filter(o => o.status === OrderStatus.PENDING).length, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
-    { label: 'Unpaid', value: MOCK_CUSTOMER_ORDERS.filter(o => o.paymentStatus === 'unpaid').length, icon: 'money_off', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
-    { label: 'Total Value', value: 'GHS ' + (MOCK_CUSTOMER_ORDERS.reduce((s, o) => s + o.totalAmount, 0) / 1000).toFixed(0) + 'K', icon: 'payments', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
-  ];
+  readonly stats = computed(() => {
+    const s = this.store.orderSummary();
+    return [
+      { label: 'Total Orders', value: s.total, icon: 'shopping_bag', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
+      { label: 'Delivered', value: s.delivered, icon: 'local_shipping', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
+      { label: 'Processing', value: s.processing + s.confirmed, icon: 'autorenew', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
+      { label: 'Pending', value: s.pending, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
+      { label: 'Unpaid', value: s.unpaid, icon: 'money_off', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
+      { label: 'Total Value', value: 'GHS ' + (s.totalValue / 1000).toFixed(0) + 'K', icon: 'payments', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
+    ];
+  });
 
-  readonly statusTabs = [
-    { label: 'All', value: 'all', count: MOCK_CUSTOMER_ORDERS.length },
-    { label: 'Pending', value: OrderStatus.PENDING, count: MOCK_CUSTOMER_ORDERS.filter(o => o.status === OrderStatus.PENDING).length },
-    { label: 'Confirmed', value: OrderStatus.CONFIRMED, count: MOCK_CUSTOMER_ORDERS.filter(o => o.status === OrderStatus.CONFIRMED).length },
-    { label: 'Processing', value: OrderStatus.PROCESSING, count: MOCK_CUSTOMER_ORDERS.filter(o => o.status === OrderStatus.PROCESSING).length },
-    { label: 'Delivered', value: OrderStatus.DELIVERED, count: MOCK_CUSTOMER_ORDERS.filter(o => o.status === OrderStatus.DELIVERED).length },
-    { label: 'Cancelled', value: OrderStatus.CANCELLED, count: MOCK_CUSTOMER_ORDERS.filter(o => o.status === OrderStatus.CANCELLED).length },
-  ];
+  readonly statusTabs = computed(() => {
+    const s = this.store.orderSummary();
+    return [
+      { label: 'All', value: 'all', count: s.total },
+      { label: 'Pending', value: OrderStatus.PENDING, count: s.pending },
+      { label: 'Confirmed', value: OrderStatus.CONFIRMED, count: s.confirmed },
+      { label: 'Processing', value: OrderStatus.PROCESSING, count: s.processing },
+      { label: 'Delivered', value: OrderStatus.DELIVERED, count: s.delivered },
+      { label: 'Cancelled', value: OrderStatus.CANCELLED, count: s.cancelled },
+    ];
+  });
 
   readonly filteredOrders = computed(() => {
-    let data = this.orders();
+    let data = this.store.orders() as OrderRow[];
     if (this.activeStatus() !== 'all') data = data.filter(o => o.status === this.activeStatus());
     if (this.payFilter) data = data.filter(o => o.paymentStatus === this.payFilter);
     if (this.regionFilter) data = data.filter(o => o.region === this.regionFilter);
@@ -158,19 +166,22 @@ export class CustomerOrdersComponent implements OnInit {
 
   readonly actions: TableAction<OrderRow>[] = [
     { label: 'View', icon: 'visibility', handler: (r) => console.log('view', r.id) },
-    { label: 'Confirm', icon: 'check_circle', condition: (r) => r.status === OrderStatus.PENDING, handler: (r) => this.confirmOrder(r) },
-    { label: 'Cancel', icon: 'cancel', color: '#dc2626', condition: (r) => r.status === OrderStatus.PENDING || r.status === OrderStatus.CONFIRMED, handler: (r) => console.log('cancel', r.id) },
+    { label: 'Confirm', icon: 'check_circle', condition: (r) => r.status === OrderStatus.PENDING,
+      handler: (r) => this.confirmOrder(r) },
+    { label: 'Cancel', icon: 'cancel', color: '#dc2626',
+      condition: (r) => r.status === OrderStatus.PENDING || r.status === OrderStatus.CONFIRMED,
+      handler: (r) => this.store.cancelOrder(r.id, '', { onSuccess: () => {}, onError: (e) => console.error(e) }) },
   ];
 
   ngOnInit(): void {
-    this.loading.set(true);
-    setTimeout(() => this.loading.set(false), 600);
+    this.store.loadOrders({});
   }
 
   setStatus(s: string): void { this.activeStatus.set(s); }
   doFilter(): void {}
   createOrder(): void { console.log('create order'); }
+
   confirmOrder(r: OrderRow): void {
-    this.orders.update(list => list.map(o => o.id === r.id ? { ...o, status: OrderStatus.CONFIRMED } : o));
+    this.store.confirmOrder(r.id, { onSuccess: () => {}, onError: (e) => console.error(e) });
   }
 }

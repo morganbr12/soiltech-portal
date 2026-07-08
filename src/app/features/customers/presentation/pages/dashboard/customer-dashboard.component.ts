@@ -1,11 +1,9 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { NgApexchartsModule } from 'ng-apexcharts';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { CustomerStore } from '../../../store/customer.store';
-import { CustomerTier, CustomerStatus } from '../../../domain/customer.model';
-import { MOCK_CUSTOMER_ORDERS, MOCK_CUSTOMERS } from '../../../data/customer.mock';
 
 @Component({
   selector: 'app-customer-dashboard',
@@ -29,7 +27,7 @@ import { MOCK_CUSTOMER_ORDERS, MOCK_CUSTOMERS } from '../../../data/customer.moc
 
       <!-- KPI Grid -->
       <div class="kpi-grid stagger-children">
-        @for (kpi of kpis; track kpi.label) {
+        @for (kpi of kpis(); track kpi.label) {
           <div class="kpi-card animate-slide-up">
             <div class="kpi-icon" [style.background]="kpi.bg">
               <span class="material-symbols-rounded" [style.color]="kpi.color">{{ kpi.icon }}</span>
@@ -76,13 +74,13 @@ import { MOCK_CUSTOMER_ORDERS, MOCK_CUSTOMERS } from '../../../data/customer.moc
             </div>
           </div>
           <apx-chart
-            [series]="tierChart.series"
-            [chart]="tierChart.chart"
-            [labels]="tierChart.labels"
-            [colors]="tierChart.colors"
-            [legend]="tierChart.legend"
-            [dataLabels]="tierChart.dataLabels"
-            [plotOptions]="tierChart.plotOptions"
+            [series]="tierChart().series"
+            [chart]="tierChart().chart"
+            [labels]="tierChart().labels"
+            [colors]="tierChart().colors"
+            [legend]="tierChart().legend"
+            [dataLabels]="tierChart().dataLabels"
+            [plotOptions]="tierChart().plotOptions"
           />
         </div>
       </div>
@@ -114,7 +112,7 @@ import { MOCK_CUSTOMER_ORDERS, MOCK_CUSTOMERS } from '../../../data/customer.moc
             <a routerLink="/customers/list" class="btn btn-ghost btn-sm">View All</a>
           </div>
           <div class="top-list">
-            @for (c of topCustomers; track c.id; let i = $index) {
+            @for (c of topCustomers(); track c.id; let i = $index) {
               <div class="top-item">
                 <div class="top-rank">{{ i + 1 }}</div>
                 <div class="top-avatar">{{ c.firstName[0] }}{{ c.lastName[0] }}</div>
@@ -147,7 +145,7 @@ import { MOCK_CUSTOMER_ORDERS, MOCK_CUSTOMERS } from '../../../data/customer.moc
               </tr>
             </thead>
             <tbody>
-              @for (o of recentOrders; track o.id) {
+              @for (o of recentOrders(); track o.id) {
                 <tr>
                   <td style="font-weight:600;color:var(--color-primary)">{{ o.id }}</td>
                   <td>{{ o.customerName }}</td>
@@ -162,7 +160,7 @@ import { MOCK_CUSTOMER_ORDERS, MOCK_CUSTOMERS } from '../../../data/customer.moc
 
         <div class="widget-card" style="min-width:220px;max-width:260px;flex-shrink:0">
           <h3 class="chart-title" style="margin-bottom:16px">Status Breakdown</h3>
-          @for (s of statusStats; track s.label) {
+          @for (s of statusStats(); track s.label) {
             <div class="status-row">
               <div class="status-dot" [style.background]="s.color"></div>
               <div class="status-label">{{ s.label }}</div>
@@ -269,29 +267,79 @@ import { MOCK_CUSTOMER_ORDERS, MOCK_CUSTOMERS } from '../../../data/customer.moc
   `]
 })
 export class CustomerDashboardComponent implements OnInit {
-  private readonly store = inject(CustomerStore);
+  protected readonly store = inject(CustomerStore);
 
-  readonly isLoading = signal(true);
+  readonly kpis = computed(() => {
+    const d = this.store.dashboardSummary();
+    if (d) {
+      return [
+        { label: 'Total Customers', value: d.kpis.totalCustomers.toLocaleString(), icon: 'people', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)', delta: 12 },
+        { label: 'Active Buyers', value: d.kpis.activeCustomers.toLocaleString(), icon: 'person_check', color: '#0284c7', bg: 'rgba(2,132,199,0.1)', delta: 8 },
+        { label: 'Pending Verify', value: d.kpis.pendingVerification.toLocaleString(), icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)', delta: -3 },
+        { label: 'Total Revenue', value: d.kpis.totalRevenue ? 'GHS ' + (d.kpis.totalRevenue / 1000).toFixed(0) + 'K' : 'GHS 0K', icon: 'payments', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)', delta: 18 },
+        { label: 'Avg Rating', value: d.kpis.avgRating.toFixed(1) + ' ★', icon: 'star', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', delta: 2 },
+        { label: 'Total Orders', value: d.kpis.totalOrders.toLocaleString(), icon: 'shopping_bag', color: '#059669', bg: 'rgba(5,150,105,0.1)', delta: 21 },
+      ];
+    }
+    const s = this.store.customerSummary();
+    const o = this.store.orderSummary();
+    return [
+      { label: 'Total Customers', value: s.total.toLocaleString(), icon: 'people', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)', delta: 12 },
+      { label: 'Active Buyers', value: (s.active + s.verified).toLocaleString(), icon: 'person_check', color: '#0284c7', bg: 'rgba(2,132,199,0.1)', delta: 8 },
+      { label: 'Pending Verify', value: s.pending.toLocaleString(), icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)', delta: -3 },
+      { label: 'Total Revenue', value: o.totalValue ? 'GHS ' + (o.totalValue / 1000).toFixed(0) + 'K' : 'GHS 0K', icon: 'payments', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)', delta: 18 },
+      { label: 'Avg Rating', value: '—', icon: 'star', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', delta: 2 },
+      { label: 'Total Orders', value: o.total.toLocaleString(), icon: 'shopping_bag', color: '#059669', bg: 'rgba(5,150,105,0.1)', delta: 21 },
+    ];
+  });
 
-  readonly topCustomers = [...MOCK_CUSTOMERS].sort((a, b) => b.totalSpent - a.totalSpent).slice(0, 7);
-  readonly recentOrders = [...MOCK_CUSTOMER_ORDERS].sort((a, b) => b.orderDate.localeCompare(a.orderDate)).slice(0, 7);
+  readonly topCustomers = computed(() => {
+    const d = this.store.dashboardSummary();
+    if (d) {
+      return d.topCustomers.map(c => {
+        const parts = c.fullName.split(' ');
+        return { ...c, firstName: parts[0] ?? c.fullName, lastName: parts.slice(1).join(' ') };
+      });
+    }
+    return [...this.store.customers()]
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .slice(0, 7);
+  });
 
-  readonly kpis = [
-    { label: 'Total Customers', value: MOCK_CUSTOMERS.length.toLocaleString(), icon: 'people', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)', delta: 12 },
-    { label: 'Active Buyers', value: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.ACTIVE || c.status === CustomerStatus.VERIFIED).length.toLocaleString(), icon: 'person_check', color: '#0284c7', bg: 'rgba(2,132,199,0.1)', delta: 8 },
-    { label: 'Pending Verify', value: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.PENDING).length.toLocaleString(), icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)', delta: -3 },
-    { label: 'Total Revenue', value: 'GHS ' + (MOCK_CUSTOMERS.reduce((s, c) => s + c.totalSpent, 0) / 1000).toFixed(0) + 'K', icon: 'payments', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)', delta: 18 },
-    { label: 'Avg Rating', value: (MOCK_CUSTOMERS.reduce((s, c) => s + c.rating, 0) / MOCK_CUSTOMERS.length).toFixed(1) + ' ★', icon: 'star', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', delta: 2 },
-    { label: 'Total Orders', value: MOCK_CUSTOMER_ORDERS.length.toLocaleString(), icon: 'shopping_bag', color: '#059669', bg: 'rgba(5,150,105,0.1)', delta: 21 },
-  ];
+  readonly recentOrders = computed(() => {
+    const d = this.store.dashboardSummary();
+    if (d) return d.recentOrders;
+    return [...this.store.orders()]
+      .sort((a, b) => b.orderDate.localeCompare(a.orderDate))
+      .slice(0, 7);
+  });
 
-  readonly statusStats = [
-    { label: 'Active', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.ACTIVE).length, color: '#16a34a', pct: 0 },
-    { label: 'Verified', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.VERIFIED).length, color: '#0284c7', pct: 0 },
-    { label: 'Pending', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.PENDING).length, color: '#d97706', pct: 0 },
-    { label: 'Suspended', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.SUSPENDED).length, color: '#dc2626', pct: 0 },
-    { label: 'Rejected', count: MOCK_CUSTOMERS.filter(c => c.status === CustomerStatus.REJECTED).length, color: '#94a3b8', pct: 0 },
-  ].map(s => ({ ...s, pct: Math.round(s.count / MOCK_CUSTOMERS.length * 100) }));
+  readonly statusStats = computed(() => {
+    const d = this.store.dashboardSummary();
+    const sb = d?.statusBreakdown ?? this.store.customerSummary();
+    const total = (d?.kpis.totalCustomers ?? this.store.customerSummary().total) || 1;
+    return [
+      { label: 'Active', count: sb.active, color: '#16a34a', pct: Math.round(sb.active / total * 100) },
+      { label: 'Verified', count: sb.verified, color: '#0284c7', pct: Math.round(sb.verified / total * 100) },
+      { label: 'Pending', count: sb.pending, color: '#d97706', pct: Math.round(sb.pending / total * 100) },
+      { label: 'Suspended', count: sb.suspended, color: '#dc2626', pct: Math.round(sb.suspended / total * 100) },
+      { label: 'Rejected', count: sb.rejected, color: '#94a3b8', pct: Math.round(sb.rejected / total * 100) },
+    ];
+  });
+
+  readonly tierChart = computed(() => {
+    const d = this.store.dashboardSummary();
+    const tb = d?.tierBreakdown ?? { bronze: 0, silver: 0, gold: 0, platinum: 0 };
+    return {
+      series: [tb.bronze, tb.silver, tb.gold, tb.platinum],
+      chart: { type: 'donut' as const, height: 200 },
+      labels: ['Bronze', 'Silver', 'Gold', 'Platinum'],
+      colors: ['#b45309', '#94a3b8', '#f59e0b', '#7c3aed'],
+      legend: { position: 'bottom' as const, fontSize: '12px' },
+      dataLabels: { enabled: false },
+      plotOptions: { pie: { donut: { size: '70%' } } },
+    };
+  });
 
   readonly growthChart = {
     series: [{ name: 'New Customers', data: [14, 22, 18, 30, 26, 35, 42, 38, 50, 44, 58, 63] }],
@@ -303,21 +351,6 @@ export class CustomerDashboardComponent implements OnInit {
     dataLabels: { enabled: false },
     grid: { borderColor: 'var(--color-border-light)', strokeDashArray: 4 },
     tooltip: { theme: 'light' },
-  };
-
-  readonly tierChart = {
-    series: [
-      MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.BRONZE).length,
-      MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.SILVER).length,
-      MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.GOLD).length,
-      MOCK_CUSTOMERS.filter(c => c.tier === CustomerTier.PLATINUM).length,
-    ],
-    chart: { type: 'donut' as const, height: 200 },
-    labels: ['Bronze', 'Silver', 'Gold', 'Platinum'],
-    colors: ['#b45309', '#94a3b8', '#f59e0b', '#7c3aed'],
-    legend: { position: 'bottom' as const, fontSize: '12px' },
-    dataLabels: { enabled: false },
-    plotOptions: { pie: { donut: { size: '70%' } } },
   };
 
   readonly revenueChart = {
@@ -338,5 +371,9 @@ export class CustomerDashboardComponent implements OnInit {
     return map[status] ?? 'badge--neutral';
   }
 
-  ngOnInit(): void { setTimeout(() => this.isLoading.set(false), 500); }
+  ngOnInit(): void {
+    this.store.loadDashboard();
+    this.store.loadCustomers({});
+    this.store.loadOrders({});
+  }
 }

@@ -30,4 +30,5 @@ export const API_ENDPOINTS = {
   AUDIT: `${API_BASE}/audit`,
   SETTINGS: `${API_BASE}/settings`,
   DASHBOARD: `${API_BASE}/dashboard`,
+  CUSTOMERS: `${API_BASE}/customers`,
 } as const;

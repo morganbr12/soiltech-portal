@@ -1,9 +1,9 @@
-import { Component, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
-import { MOCK_CUSTOMER_CHATS } from '../../../data/customer.mock';
+import { CustomerStore } from '../../../store/customer.store';
 import { CustomerChat, ChatStatus } from '../../../domain/customer.model';
 
 type ChatRow = CustomerChat & Record<string, unknown>;
@@ -18,7 +18,7 @@ type ChatRow = CustomerChat & Record<string, unknown>;
         title="Customer Chats"
         subtitle="Monitor and manage customer support conversations"
         icon="chat"
-        [badge]="openCount"
+        [badge]="store.openChats()"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Customers', url: '/customers' }, { label: 'Chats' }]"
       >
         <button class="btn btn-secondary btn-sm" (click)="escalateSelected()">
@@ -28,7 +28,7 @@ type ChatRow = CustomerChat & Record<string, unknown>;
 
       <!-- Stats -->
       <div class="quick-stats stagger-children">
-        @for (stat of stats; track stat.label) {
+        @for (stat of stats(); track stat.label) {
           <div class="quick-stat animate-slide-up">
             <div class="qs-icon" [style.background]="stat.bg">
               <span class="material-symbols-rounded" [style.color]="stat.color">{{ stat.icon }}</span>
@@ -47,7 +47,7 @@ type ChatRow = CustomerChat & Record<string, unknown>;
         <div class="chat-list-panel">
           <div class="chat-panel-header">
             <div class="filter-tabs compact">
-              @for (tab of tabs; track tab.value) {
+              @for (tab of tabs(); track tab.value) {
                 <button class="filter-tab" [class.active]="activeTab() === tab.value" (click)="setTab(tab.value)">
                   {{ tab.label }}
                   @if (tab.badge) { <span class="tab-badge">{{ tab.badge }}</span> }
@@ -143,10 +143,10 @@ type ChatRow = CustomerChat & Record<string, unknown>;
       <div style="margin-top:20px">
         <h3 style="font-size:0.9375rem;font-weight:700;color:var(--color-text-primary);margin-bottom:12px">All Conversations</h3>
         <app-data-table
-          [data]="allChats()"
+          [data]="store.chats()"
           [columns]="columns"
           [actions]="tableActions"
-          [loading]="loading()"
+          [loading]="store.isLoadingChats()"
           [searchable]="true"
           searchPlaceholder="Search conversations..."
         />
@@ -212,28 +212,33 @@ type ChatRow = CustomerChat & Record<string, unknown>;
   `]
 })
 export class CustomerChatsComponent implements OnInit {
-  readonly allChats = signal(MOCK_CUSTOMER_CHATS as ChatRow[]);
-  readonly loading = signal(false);
+  protected readonly store = inject(CustomerStore);
+
   readonly activeTab = signal<string>('all');
   readonly selectedChat = signal<ChatRow | null>(null);
   replyText = '';
 
-  readonly openCount = MOCK_CUSTOMER_CHATS.filter(c => c.status === ChatStatus.OPEN || c.status === ChatStatus.ESCALATED).length;
+  readonly stats = computed(() => {
+    const s = this.store.chatSummary();
+    const unread = this.store.chats().reduce((sum, c) => sum + c.unreadCount, 0);
+    return [
+      { label: 'Open Chats', value: s.open, icon: 'chat', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
+      { label: 'Escalated', value: s.escalated, icon: 'escalator_warning', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
+      { label: 'Pending', value: s.pending, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
+      { label: 'Resolved', value: s.resolved, icon: 'check_circle', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
+      { label: 'Unread Msgs', value: unread, icon: 'mark_unread_chat_alt', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
+    ];
+  });
 
-  readonly stats = [
-    { label: 'Open Chats', value: MOCK_CUSTOMER_CHATS.filter(c => c.status === ChatStatus.OPEN).length, icon: 'chat', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
-    { label: 'Escalated', value: MOCK_CUSTOMER_CHATS.filter(c => c.status === ChatStatus.ESCALATED).length, icon: 'escalator_warning', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
-    { label: 'Pending', value: MOCK_CUSTOMER_CHATS.filter(c => c.status === ChatStatus.PENDING).length, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
-    { label: 'Resolved', value: MOCK_CUSTOMER_CHATS.filter(c => c.status === ChatStatus.RESOLVED).length, icon: 'check_circle', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
-    { label: 'Unread Msgs', value: MOCK_CUSTOMER_CHATS.reduce((s, c) => s + c.unreadCount, 0), icon: 'mark_unread_chat_alt', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
-  ];
-
-  readonly tabs = [
-    { label: 'All', value: 'all', badge: 0 },
-    { label: 'Open', value: ChatStatus.OPEN, badge: MOCK_CUSTOMER_CHATS.filter(c => c.status === ChatStatus.OPEN).length },
-    { label: 'Escalated', value: ChatStatus.ESCALATED, badge: MOCK_CUSTOMER_CHATS.filter(c => c.status === ChatStatus.ESCALATED).length },
-    { label: 'Resolved', value: ChatStatus.RESOLVED, badge: 0 },
-  ];
+  readonly tabs = computed(() => {
+    const s = this.store.chatSummary();
+    return [
+      { label: 'All', value: 'all', badge: 0 },
+      { label: 'Open', value: ChatStatus.OPEN, badge: s.open },
+      { label: 'Escalated', value: ChatStatus.ESCALATED, badge: s.escalated },
+      { label: 'Resolved', value: ChatStatus.RESOLVED, badge: 0 },
+    ];
+  });
 
   readonly sampleMessages = [
     { id: 1, text: 'Hello, I have not received my order yet.', isAgent: false, time: '10:23 AM' },
@@ -245,8 +250,9 @@ export class CustomerChatsComponent implements OnInit {
 
   readonly filteredChats = computed(() => {
     const tab = this.activeTab();
-    if (tab === 'all') return this.allChats();
-    return this.allChats().filter(c => c.status === tab);
+    const chats = this.store.chats() as ChatRow[];
+    if (tab === 'all') return chats;
+    return chats.filter(c => c.status === tab);
   });
 
   readonly columns: Column<ChatRow>[] = [
@@ -268,24 +274,31 @@ export class CustomerChatsComponent implements OnInit {
 
   readonly tableActions: TableAction<ChatRow>[] = [
     { label: 'Open', icon: 'open_in_new', handler: (r) => this.selectChat(r) },
-    { label: 'Resolve', icon: 'check_circle', condition: (r) => r.status !== ChatStatus.RESOLVED, handler: (r) => this.resolveChat(r) },
-    { label: 'Escalate', icon: 'escalator_warning', color: '#dc2626', condition: (r) => r.status === ChatStatus.OPEN, handler: (r) => console.log('escalate', r.id) },
+    { label: 'Resolve', icon: 'check_circle', condition: (r) => r.status !== ChatStatus.RESOLVED,
+      handler: (r) => this.resolveChat(r) },
+    { label: 'Escalate', icon: 'escalator_warning', color: '#dc2626',
+      condition: (r) => r.status === ChatStatus.OPEN,
+      handler: (r) => this.store.escalateChat(r.id, { onSuccess: () => {}, onError: (e) => console.error(e) }) },
   ];
 
   ngOnInit(): void {
-    this.loading.set(true);
-    const firstOpen = this.allChats().find(c => c.status === ChatStatus.OPEN || c.status === ChatStatus.ESCALATED);
-    if (firstOpen) this.selectedChat.set(firstOpen);
-    setTimeout(() => this.loading.set(false), 500);
+    this.store.loadChats({});
   }
 
   setTab(val: string): void { this.activeTab.set(val); }
+
   selectChat(c: ChatRow): void { this.selectedChat.set(c); }
+
   escalateSelected(): void { console.log('escalate'); }
-  sendReply(): void { this.replyText = ''; }
+
+  sendReply(): void {
+    if (!this.replyText.trim() || !this.selectedChat()) return;
+    this.store.sendChatMessage(this.selectedChat()!.id, this.replyText, () => {});
+    this.replyText = '';
+  }
 
   resolveChat(c: ChatRow): void {
-    this.allChats.update(list => list.map(x => x.id === c.id ? { ...x, status: ChatStatus.RESOLVED } : x));
+    this.store.resolveChat(c.id, { onSuccess: () => {}, onError: (e) => console.error(e) });
   }
 
   statusBadge(s: string): string {
