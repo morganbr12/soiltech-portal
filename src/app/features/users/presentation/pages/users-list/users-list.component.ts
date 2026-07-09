@@ -1,31 +1,41 @@
-import { Component, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
+import { AddUserDrawerComponent } from '../../components/add-user-drawer/add-user-drawer.component';
 import { MOCK_PORTAL_USERS } from '../../../../../shared/data/mock-data';
 import { EntityStatus } from '../../../../../core/enums/status.enum';
 import { ROLE_LABELS } from '../../../../../core/enums/roles.enum';
+import { ToastService } from '../../../../../shared/services/toast.service';
+import { PortalUser } from '../../../domain/user.model';
 
-type PortalUser = typeof MOCK_PORTAL_USERS[number];
+type UserRow = PortalUser & Record<string, unknown>;
 
 @Component({
   selector: 'app-users-list',
   standalone: true,
-  imports: [CommonModule, PageHeaderComponent, DataTableComponent],
+  imports: [CommonModule, PageHeaderComponent, DataTableComponent, AddUserDrawerComponent],
   template: `
+    @if (showAddDrawer()) {
+      <app-add-user-drawer
+        (closed)="showAddDrawer.set(false)"
+        (created)="onUserCreated($event)"
+      />
+    }
+
     <div class="page-container">
       <app-page-header
         title="Users & Access"
         subtitle="Manage portal users, roles, and permissions"
         icon="group"
-        [badge]="MOCK_PORTAL_USERS.length"
+        [badge]="users().length"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Users' }]"
       >
         <button class="btn btn-secondary btn-sm">
           <span class="material-symbols-rounded">security</span> Manage Roles
         </button>
-        <button class="btn btn-primary btn-sm">
-          <span class="material-symbols-rounded">person_add</span> Invite User
+        <button class="btn btn-primary btn-sm" (click)="showAddDrawer.set(true)">
+          <span class="material-symbols-rounded">person_add</span> Add User
         </button>
       </app-page-header>
 
@@ -41,35 +51,45 @@ type PortalUser = typeof MOCK_PORTAL_USERS[number];
   `
 })
 export class UsersListComponent implements OnInit {
-  readonly MOCK_PORTAL_USERS = MOCK_PORTAL_USERS;
-  readonly users = signal(MOCK_PORTAL_USERS as PortalUser[]);
-  readonly loading = signal(false);
+  private readonly toast = inject(ToastService);
 
-  readonly columns: Column<PortalUser>[] = [
-    { key: 'fullName', label: 'User', type: 'avatar', sortable: true },
-    { key: 'email', label: 'Email', sortable: true },
-    { key: 'role', label: 'Role', sortable: true, format: (v) => ROLE_LABELS[v as keyof typeof ROLE_LABELS] ?? String(v) },
-    { key: 'region', label: 'Region', sortable: true },
-    { key: 'phone', label: 'Phone' },
+  readonly users        = signal(MOCK_PORTAL_USERS as unknown as UserRow[]);
+  readonly loading      = signal(false);
+  readonly showAddDrawer = signal(false);
+
+  readonly columns: Column<UserRow>[] = [
+    { key: 'fullName', label: 'User',       type: 'avatar', sortable: true },
+    { key: 'email',    label: 'Email',      sortable: true },
+    { key: 'adminRole', label: 'Role',       sortable: true, format: (v) => ROLE_LABELS[v as keyof typeof ROLE_LABELS] ?? String(v) },
+    { key: 'region',   label: 'Region',     sortable: true },
+    { key: 'phone',    label: 'Phone' },
     {
       key: 'status', label: 'Status', type: 'status',
       statusMap: {
-        [EntityStatus.ACTIVE]: { label: 'Active', class: 'badge--success' },
+        [EntityStatus.ACTIVE]:   { label: 'Active',   class: 'badge--success' },
         [EntityStatus.INACTIVE]: { label: 'Inactive', class: 'badge--neutral' },
       }
     },
-    { key: 'lastLogin', label: 'Last Login', type: 'date', sortable: true },
-    { key: 'createdAt', label: 'Created', type: 'date', sortable: true },
+    { key: 'lastLoginAt', label: 'Last Login', type: 'date', sortable: true },
+    { key: 'createdAt',  label: 'Created',    type: 'date', sortable: true },
   ];
 
-  readonly actions: TableAction<PortalUser>[] = [
-    { label: 'Edit User', icon: 'edit', handler: (r) => console.log('edit', r.id) },
-    { label: 'Change Role', icon: 'manage_accounts', handler: (r) => console.log('role', r.id) },
-    { label: 'Deactivate', icon: 'block', color: '#dc2626', condition: (r) => r.status === EntityStatus.ACTIVE, handler: (r) => console.log('deactivate', r.id) },
+  readonly actions: TableAction<UserRow>[] = [
+    { label: 'Edit User',    icon: 'edit',            handler: (r) => console.log('edit', r['id']) },
+    { label: 'Change Role',  icon: 'manage_accounts', handler: (r) => console.log('role', r['id']) },
+    { label: 'Deactivate',   icon: 'block', color: '#dc2626',
+      condition: (r) => r['status'] === EntityStatus.ACTIVE,
+      handler: (r) => console.log('deactivate', r['id']) },
   ];
 
   ngOnInit(): void {
     this.loading.set(true);
     setTimeout(() => this.loading.set(false), 600);
+  }
+
+  onUserCreated(user: PortalUser): void {
+    this.users.update(list => [user as unknown as UserRow, ...list]);
+    this.showAddDrawer.set(false);
+    this.toast.success(`${user.fullName} added successfully`);
   }
 }

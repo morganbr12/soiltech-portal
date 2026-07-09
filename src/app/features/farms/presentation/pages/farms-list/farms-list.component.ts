@@ -1,22 +1,24 @@
-import { Component, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
-import { MOCK_FARMS } from '../../../../../shared/data/mock-data';
+import { FarmStore } from '../../../store/farm.store';
+import { Farm } from '../../../domain/farm.model';
 
-type Farm = typeof MOCK_FARMS[number];
+type FarmRow = Farm & Record<string, unknown>;
 
 @Component({
   selector: 'app-farms-list',
   standalone: true,
-  imports: [CommonModule, PageHeaderComponent, DataTableComponent],
+  imports: [CommonModule, FormsModule, PageHeaderComponent, DataTableComponent],
   template: `
     <div class="page-container">
       <app-page-header
         title="Farm Management"
         subtitle="GPS-mapped farm registry with crop and harvest information"
         icon="agriculture"
-        [badge]="MOCK_FARMS.length"
+        [badge]="store.meta().total"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Farms' }]"
       >
         <button class="btn btn-secondary btn-sm">
@@ -27,43 +29,70 @@ type Farm = typeof MOCK_FARMS[number];
         </button>
       </app-page-header>
 
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <div class="filter-right">
+          <select class="filter-select" [(ngModel)]="regionFilter" (change)="doFilter()">
+            <option value="">All Regions</option>
+            @for (r of store.regions(); track r) { <option [value]="r">{{ r }}</option> }
+          </select>
+          <select class="filter-select" [(ngModel)]="cropFilter" (change)="doFilter()">
+            <option value="">All Crops</option>
+            @for (c of store.cropTypes(); track c) { <option [value]="c">{{ c }}</option> }
+          </select>
+        </div>
+      </div>
+
       <app-data-table
-        [data]="farms()"
+        [data]="store.farms()"
         [columns]="columns"
         [actions]="actions"
-        [loading]="loading()"
+        [loading]="store.isLoading()"
         [selectable]="true"
-        searchPlaceholder="Search by farm name, ID, farmer, region..."
+        [searchable]="true"
+        searchPlaceholder="Search by farm name or farmer..."
       />
     </div>
-  `
+  `,
+  styles: [`
+    .filter-bar { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 16px; gap: 8px; flex-wrap: wrap; }
+    .filter-select { border: 1px solid var(--color-border); border-radius: 8px; padding: 7px 12px; font-size: 0.875rem; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; }
+  `],
 })
 export class FarmsListComponent implements OnInit {
-  readonly MOCK_FARMS = MOCK_FARMS;
-  readonly farms = signal(MOCK_FARMS as Farm[]);
-  readonly loading = signal(false);
+  protected readonly store = inject(FarmStore);
 
-  readonly columns: Column<Farm>[] = [
-    { key: 'id', label: 'Farm ID', width: '130px', sortable: true },
-    { key: 'name', label: 'Farm Name', sortable: true },
-    { key: 'farmerName', label: 'Farmer', type: 'avatar', sortable: true },
-    { key: 'region', label: 'Region', sortable: true },
-    { key: 'district', label: 'District' },
-    { key: 'cropType', label: 'Crop', sortable: true },
-    { key: 'sizeHectares', label: 'Size (ha)', align: 'right', sortable: true },
-    { key: 'estimatedYield', label: 'Est. Yield (t)', align: 'right', sortable: true },
-    { key: 'lastHarvestDate', label: 'Last Harvest', type: 'date', sortable: true },
-    { key: 'registeredDate', label: 'Registered', type: 'date', sortable: true },
+  regionFilter = '';
+  cropFilter   = '';
+
+  readonly columns: Column<FarmRow>[] = [
+    { key: 'farmName',         label: 'Farm Name',      sortable: true },
+    { key: 'farmerName',       label: 'Farmer',         type: 'avatar', sortable: true },
+    { key: 'region',           label: 'Region',         sortable: true },
+    { key: 'district',         label: 'District' },
+    { key: 'cropType',         label: 'Crop',           sortable: true },
+    { key: 'sizeHectares',     label: 'Size (ha)',      align: 'right', sortable: true,
+      format: (v) => v != null ? Number(v).toLocaleString('en-GH', { maximumFractionDigits: 2 }) : '—' },
+    { key: 'estimatedYieldKg', label: 'Est. Yield (kg)', align: 'right', sortable: true,
+      format: (v) => v != null ? Number(v).toLocaleString('en-GH', { maximumFractionDigits: 0 }) : '—' },
+    { key: 'lastHarvestDate',  label: 'Last Harvest',   type: 'date',   sortable: true },
+    { key: 'registeredDate',   label: 'Registered',     type: 'date',   sortable: true },
   ];
 
-  readonly actions: TableAction<Farm>[] = [
-    { label: 'View Details', icon: 'visibility', handler: (r) => console.log('view', r.id) },
-    { label: 'View on Map', icon: 'map', color: '#0284c7', handler: (r) => console.log('map', r.id) },
-    { label: 'Edit Farm', icon: 'edit', handler: (r) => console.log('edit', r.id) },
+  readonly actions: TableAction<FarmRow>[] = [
+    { label: 'View Details', icon: 'visibility',   handler: (r) => console.log('view', r.farmId) },
+    { label: 'View on Map',  icon: 'map',          color: '#0284c7', handler: (r) => console.log('map', r.farmId) },
+    { label: 'Edit Farm',    icon: 'edit',         handler: (r) => console.log('edit', r.farmId) },
   ];
 
   ngOnInit(): void {
-    this.loading.set(true);
-    setTimeout(() => this.loading.set(false), 600);
+    this.store.load({});
+  }
+
+  doFilter(): void {
+    this.store.load({
+      region:   this.regionFilter || undefined,
+      crop_type: this.cropFilter  || undefined,
+    });
   }
 }
