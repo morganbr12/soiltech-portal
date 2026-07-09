@@ -26,7 +26,8 @@ import { HeaderComponent } from './header/header.component';
   styles: [`
     .admin-layout {
       display: flex;
-      min-height: 100vh;
+      height: 100vh;
+      overflow: hidden;
       background: var(--color-bg);
 
       &__main {
@@ -36,7 +37,8 @@ import { HeaderComponent } from './header/header.component';
         min-width: 0;
         display: flex;
         flex-direction: column;
-        min-height: 100vh;
+        height: 100vh;
+        overflow-y: auto;
       }
 
       &.sidebar-collapsed &__main {

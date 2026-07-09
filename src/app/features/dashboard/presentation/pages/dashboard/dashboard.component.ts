@@ -1,14 +1,10 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { Component, inject, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { NgApexchartsModule } from 'ng-apexcharts';
 import { AppStore } from '../../../../../core/state/app.store';
-import {
-  MOCK_KPIS, MOCK_ACTIVITIES, MOCK_ALERTS,
-  MOCK_REGION_DATA, MONTHLY_COLLECTION_DATA,
-  DELIVERY_STATUS_DATA, REVENUE_TREND_DATA
-} from '../../../data/dashboard.mock';
-import { KpiCard, SystemAlert } from '../../../domain/dashboard.model';
+import { DashboardStore } from '../../../store/dashboard.store';
+import { KpiCard } from '../../../domain/dashboard.model';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -44,30 +40,9 @@ dayjs.extend(relativeTime);
         </div>
       </div>
 
-      <!-- System Alerts -->
-      @if (alerts().length) {
-        <div class="alerts-section animate-slide-up">
-          @for (alert of alerts(); track alert.id) {
-            <div class="alert-item" [class]="'alert-item--' + alert.severity">
-              <span class="material-symbols-rounded alert-icon">
-                {{ alert.severity === 'critical' ? 'error' : alert.severity === 'warning' ? 'warning' : 'info' }}
-              </span>
-              <div class="alert-content">
-                <strong>{{ alert.title }}</strong>
-                <span>{{ alert.message }}</span>
-              </div>
-              <span class="alert-time">{{ alert.time }}</span>
-              <button class="alert-dismiss" (click)="dismissAlert(alert.id)">
-                <span class="material-symbols-rounded">close</span>
-              </button>
-            </div>
-          }
-        </div>
-      }
-
       <!-- KPI Grid -->
       <div class="kpi-grid stagger-children animate-slide-up">
-        @for (kpi of kpis; track kpi.id) {
+        @for (kpi of kpis(); track kpi.id) {
           <a [routerLink]="kpi.route" class="kpi-card animate-slide-up">
             <div class="kpi-card__header">
               <div class="kpi-icon" [style.background]="kpi.bgColor">
@@ -107,15 +82,15 @@ dayjs.extend(relativeTime);
             </div>
           </div>
           <apx-chart
-            [series]="collectionChart.series"
-            [chart]="collectionChart.chart"
-            [xaxis]="collectionChart.xaxis"
-            [colors]="collectionChart.colors"
-            [stroke]="collectionChart.stroke"
-            [fill]="collectionChart.fill"
-            [legend]="collectionChart.legend"
-            [grid]="collectionChart.grid"
-            [tooltip]="collectionChart.tooltip"
+            [series]="collectionChart().series"
+            [chart]="collectionChart().chart"
+            [xaxis]="collectionChart().xaxis"
+            [colors]="collectionChart().colors"
+            [stroke]="collectionChart().stroke"
+            [fill]="collectionChart().fill"
+            [legend]="collectionChart().legend"
+            [grid]="collectionChart().grid"
+            [tooltip]="collectionChart().tooltip"
           />
         </div>
 
@@ -128,13 +103,13 @@ dayjs.extend(relativeTime);
             </div>
           </div>
           <apx-chart
-            [series]="donutChart.series"
-            [chart]="donutChart.chart"
-            [labels]="donutChart.labels"
-            [colors]="donutChart.colors"
-            [legend]="donutChart.legend"
-            [plotOptions]="donutChart.plotOptions"
-            [stroke]="donutChart.stroke"
+            [series]="donutChart().series"
+            [chart]="donutChart().chart"
+            [labels]="donutChart().labels"
+            [colors]="donutChart().colors"
+            [legend]="donutChart().legend"
+            [plotOptions]="donutChart().plotOptions"
+            [stroke]="donutChart().stroke"
           />
         </div>
 
@@ -152,16 +127,16 @@ dayjs.extend(relativeTime);
             </div>
           </div>
           <apx-chart
-            [series]="revenueChart.series"
-            [chart]="revenueChart.chart"
-            [xaxis]="revenueChart.xaxis"
-            [colors]="revenueChart.colors"
-            [stroke]="revenueChart.stroke"
-            [fill]="revenueChart.fill"
-            [markers]="revenueChart.markers"
-            [grid]="revenueChart.grid"
-            [yaxis]="revenueChart.yaxis"
-            [tooltip]="revenueChart.tooltip"
+            [series]="revenueChart().series"
+            [chart]="revenueChart().chart"
+            [xaxis]="revenueChart().xaxis"
+            [colors]="revenueChart().colors"
+            [stroke]="revenueChart().stroke"
+            [fill]="revenueChart().fill"
+            [markers]="revenueChart().markers"
+            [grid]="revenueChart().grid"
+            [yaxis]="revenueChart().yaxis"
+            [tooltip]="revenueChart().tooltip"
           />
         </div>
 
@@ -181,7 +156,7 @@ dayjs.extend(relativeTime);
               <span>Produce</span>
               <span>Revenue</span>
             </div>
-            @for (r of regionData; track r.region) {
+            @for (r of regionData(); track r.region) {
               <div class="region-row">
                 <span class="region-name">
                   <div class="region-dot"></div>
@@ -205,7 +180,7 @@ dayjs.extend(relativeTime);
             <button class="view-all-link">View all →</button>
           </div>
           <div class="activity-list">
-            @for (activity of activities; track activity.id) {
+            @for (activity of activities(); track activity.id) {
               <div class="activity-item">
                 <div class="activity-icon" [style.background]="activity.iconColor + '20'">
                   <span class="material-symbols-rounded" [style.color]="activity.iconColor">{{ activity.icon }}</span>
@@ -243,31 +218,6 @@ dayjs.extend(relativeTime);
     .dash-subtitle { font-size: 0.875rem; color: var(--color-text-secondary); margin-top: 4px; }
     .dash-date { font-weight: 600; color: var(--color-text-primary); }
     .dash-actions { display: flex; gap: 8px; flex-shrink: 0; }
-
-    .alerts-section {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-bottom: 24px;
-    }
-
-    .alert-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 14px;
-      border-radius: 10px;
-      font-size: 0.875rem;
-
-      &--critical { background: #fee2e2; border: 1px solid #fca5a5; .alert-icon { color: #dc2626; } }
-      &--warning  { background: #fef3c7; border: 1px solid #fcd34d; .alert-icon { color: #d97706; } }
-      &--info     { background: #dbeafe; border: 1px solid #93c5fd; .alert-icon { color: #1d4ed8; } }
-    }
-
-    .alert-icon { font-size: 20px; flex-shrink: 0; }
-    .alert-content { flex: 1; strong { color: var(--color-text-primary); margin-right: 8px; } span { color: var(--color-text-secondary); } }
-    .alert-time { font-size: 0.75rem; color: var(--color-text-muted); white-space: nowrap; }
-    .alert-dismiss { background: none; border: none; cursor: pointer; color: var(--color-text-muted); padding: 2px; span { font-size: 18px; } &:hover { color: var(--color-text-primary); } }
 
     .kpi-grid {
       display: grid;
@@ -412,7 +362,7 @@ dayjs.extend(relativeTime);
     .revenue-cell { color: var(--color-primary); font-weight: 600; }
     .view-all-link { font-size: 0.8125rem; color: var(--color-primary); text-decoration: none; background: none; border: none; cursor: pointer; font-family: inherit; }
 
-    .activity-list { display: flex; flex-direction: column; gap: 0; }
+    .activity-list { display: flex; flex-direction: column; gap: 0; height: 320px; overflow-y: auto; &::-webkit-scrollbar { width: 4px; } &::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 99px; } }
 
     .activity-item {
       display: flex;
@@ -439,65 +389,106 @@ dayjs.extend(relativeTime);
   `]
 })
 export class DashboardComponent implements OnInit {
-  readonly store = inject(AppStore);
+  readonly store     = inject(AppStore);
+  readonly dashStore = inject(DashboardStore);
 
-  readonly kpis = MOCK_KPIS;
-  readonly activities = MOCK_ACTIVITIES;
-  readonly regionData = MOCK_REGION_DATA;
-  readonly alerts = signal(MOCK_ALERTS.filter(a => !a.dismissed));
-
-  greeting = computed(() => {
+  readonly greeting = computed(() => {
     const h = new Date().getHours();
     if (h < 12) return 'morning';
     if (h < 17) return 'afternoon';
     return 'evening';
   });
 
-  today = computed(() => dayjs().format('dddd, MMMM D, YYYY'));
+  readonly today = computed(() => dayjs().format('dddd, MMMM D, YYYY'));
 
-  readonly collectionChart = {
-    series: MONTHLY_COLLECTION_DATA.series,
-    chart: { type: 'area' as const, height: 240, toolbar: { show: false }, sparkline: { enabled: false }, fontFamily: 'Inter, sans-serif', background: 'transparent' },
-    xaxis: { categories: MONTHLY_COLLECTION_DATA.categories, labels: { style: { fontSize: '12px', colors: '#64748b' } }, axisBorder: { show: false }, axisTicks: { show: false } },
-    colors: ['#1a7a4a', '#0284c7', '#f59e0b'],
-    stroke: { curve: 'smooth' as const, width: 2 },
-    fill: { type: 'gradient', gradient: { opacityFrom: 0.3, opacityTo: 0.05, shadeIntensity: 1 } },
-    legend: { position: 'top' as const, horizontalAlign: 'right' as const, fontSize: '12px' },
-    grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
-    tooltip: { theme: 'light', shared: true },
-  };
+  readonly kpis = computed((): KpiCard[] => {
+    const k = this.dashStore.data()?.kpis;
+    if (!k) return [];
+    const fmt = (n: number) => n.toLocaleString('en-GH', { maximumFractionDigits: 0 });
+    const ghs  = (n: number) => `₵${fmt(n)}`;
+    return [
+      { id: '1',  title: 'Total LBCs',        value: fmt(k.totalLbcs),                     trend: k.totalLbcsTrend,         trendLabel: 'vs last month', icon: 'business_center', color: '#1a7a4a', bgColor: 'rgba(26,122,74,0.1)',    route: '/lbc' },
+      { id: '2',  title: 'Active Agents',      value: fmt(k.activeAgents),                  trend: k.activeAgentsTrend,      trendLabel: 'vs last month', icon: 'badge',           color: '#0284c7', bgColor: 'rgba(2,132,199,0.1)',    route: '/agents' },
+      { id: '3',  title: 'Registered Farmers', value: fmt(k.registeredFarmers),             trend: k.registeredFarmersTrend, trendLabel: 'vs last month', icon: 'person_pin',      color: '#7c3aed', bgColor: 'rgba(124,58,237,0.1)',   route: '/farmers' },
+      { id: '4',  title: 'Registered Farms',   value: fmt(k.registeredFarms),               trend: k.registeredFarmsTrend,   trendLabel: 'vs last month', icon: 'agriculture',     color: '#f59e0b', bgColor: 'rgba(245,158,11,0.1)',   route: '/farms' },
+      { id: '5',  title: "Today's Collection", value: `${k.todaysCollection}t`,             trend: k.todaysCollectionTrend,  trendLabel: 'vs yesterday',  icon: 'eco',             color: '#16a34a', bgColor: 'rgba(22,163,74,0.1)',    route: '/produce' },
+      { id: '6',  title: 'Vehicles on Route',  value: fmt(k.vehiclesOnRoute),               trend: k.vehiclesOnRouteTrend,   trendLabel: 'vs yesterday',  icon: 'local_shipping',  color: '#0891b2', bgColor: 'rgba(8,145,178,0.1)',    route: '/tracking' },
+      { id: '7',  title: 'Drivers Online',     value: fmt(k.driversOnline),                 trend: k.driversOnlineTrend,     trendLabel: 'vs yesterday',  icon: 'drive_eta',       color: '#64748b', bgColor: 'rgba(100,116,139,0.1)', route: '/logistics' },
+      { id: '8',  title: 'Deliveries Today',   value: fmt(k.deliveriesToday),               trend: k.deliveriesTodayTrend,   trendLabel: 'vs yesterday',  icon: 'inventory_2',     color: '#dc2626', bgColor: 'rgba(220,38,38,0.1)',    route: '/logistics' },
+      { id: '9',  title: 'Warehouse Capacity', value: `${k.warehouseCapacity.toFixed(1)}%`, trend: k.warehouseCapacityTrend, trendLabel: 'fill rate',     icon: 'warehouse',       color: '#d97706', bgColor: 'rgba(217,119,6,0.1)',    route: '/warehouses' },
+      { id: '10', title: "Today's Revenue",    value: ghs(k.todaysRevenue),                 trend: k.todaysRevenueTrend,     trendLabel: 'vs yesterday',  icon: 'payments',        color: '#1a7a4a', bgColor: 'rgba(26,122,74,0.1)',    route: '/payments' },
+      { id: '11', title: 'Payments Pending',   value: ghs(k.paymentsPending),               trend: k.paymentsPendingTrend,   trendLabel: 'vs yesterday',  icon: 'pending',         color: '#f59e0b', bgColor: 'rgba(245,158,11,0.1)',   route: '/payments' },
+      { id: '12', title: 'Failed Deliveries',  value: fmt(k.failedDeliveries),              trend: k.failedDeliveriesTrend,  trendLabel: 'vs yesterday',  icon: 'cancel',          color: '#dc2626', bgColor: 'rgba(220,38,38,0.1)',    route: '/logistics' },
+    ];
+  });
 
-  readonly donutChart = {
-    series: DELIVERY_STATUS_DATA.values,
-    chart: { type: 'donut' as const, height: 260, fontFamily: 'Inter, sans-serif', background: 'transparent' },
-    labels: DELIVERY_STATUS_DATA.labels,
-    colors: DELIVERY_STATUS_DATA.colors,
-    legend: { position: 'bottom' as const, fontSize: '12px' },
-    plotOptions: { pie: { donut: { size: '70%', labels: { show: true, total: { show: true, label: 'Total', formatter: () => '1,204' } } } } },
-    stroke: { width: 0 },
-  };
+  readonly activities = computed(() =>
+    (this.dashStore.data()?.recentActivity ?? []).map(a => ({
+      ...a, time: dayjs(a.time).fromNow(),
+    }))
+  );
 
-  readonly revenueChart = {
-    series: [
-      { name: 'Revenue', data: REVENUE_TREND_DATA.revenue },
-      { name: 'Target', data: REVENUE_TREND_DATA.target },
-    ],
-    chart: { type: 'line' as const, height: 220, toolbar: { show: false }, fontFamily: 'Inter, sans-serif', background: 'transparent' },
-    xaxis: { categories: REVENUE_TREND_DATA.categories, labels: { style: { fontSize: '12px', colors: '#64748b' } }, axisBorder: { show: false }, axisTicks: { show: false } },
-    colors: ['#1a7a4a', '#94a3b8'],
-    stroke: { curve: 'smooth' as const, width: [3, 2], dashArray: [0, 5] },
-    fill: { type: ['gradient', 'solid'], gradient: { opacityFrom: 0.15, opacityTo: 0.01 } },
-    markers: { size: 4, colors: ['#1a7a4a'], strokeColors: '#ffffff', strokeWidth: 2 },
-    grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
-    yaxis: { labels: { formatter: (v: number) => `₵${(v/1000).toFixed(0)}k`, style: { fontSize: '11px', colors: '#64748b' } } },
-    tooltip: { theme: 'light', y: { formatter: (v: number) => `₵${v.toLocaleString()}` } },
-  };
+  readonly regionData = computed(() =>
+    this.dashStore.data()?.regionalOverview ?? []
+  );
+
+  readonly collectionChart = computed(() => {
+    const mc = this.dashStore.data()?.monthlyCollection;
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return {
+      series: [
+        { name: 'Cocoa',  data: mc?.cocoa  ?? new Array(12).fill(0) },
+        { name: 'Coffee', data: mc?.coffee ?? new Array(12).fill(0) },
+        { name: 'Cashew', data: mc?.cashew ?? new Array(12).fill(0) },
+      ],
+      chart: { type: 'area' as const, height: 240, toolbar: { show: false }, fontFamily: 'Inter, sans-serif', background: 'transparent' },
+      xaxis: { categories: MONTHS, labels: { style: { fontSize: '12px', colors: '#64748b' } }, axisBorder: { show: false }, axisTicks: { show: false } },
+      colors: ['#1a7a4a', '#0284c7', '#f59e0b'],
+      stroke: { curve: 'smooth' as const, width: 2 },
+      fill: { type: 'gradient', gradient: { opacityFrom: 0.3, opacityTo: 0.05, shadeIntensity: 1 } },
+      legend: { position: 'top' as const, horizontalAlign: 'right' as const, fontSize: '12px' },
+      grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
+      tooltip: { theme: 'light', shared: true },
+    };
+  });
+
+  readonly donutChart = computed(() => {
+    const ds = this.dashStore.data()?.deliveryStatus;
+    const vals = ds
+      ? [ds.delivered, ds.inTransit, ds.scheduled, ds.failed, ds.returned]
+      : [0, 0, 0, 0, 0];
+    const total = vals.reduce((a, b) => a + b, 0).toLocaleString();
+    return {
+      series: vals,
+      chart: { type: 'donut' as const, height: 260, fontFamily: 'Inter, sans-serif', background: 'transparent' },
+      labels: ['Delivered', 'In Transit', 'Scheduled', 'Failed', 'Returned'],
+      colors: ['#16a34a', '#0284c7', '#7c3aed', '#dc2626', '#f59e0b'],
+      legend: { position: 'bottom' as const, fontSize: '12px' },
+      plotOptions: { pie: { donut: { size: '70%', labels: { show: true, total: { show: true, label: 'Total', formatter: () => total } } } } },
+      stroke: { width: 0 },
+    };
+  });
+
+  readonly revenueChart = computed(() => {
+    const mr = this.dashStore.data()?.monthlyRevenue;
+    return {
+      series: [
+        { name: 'Revenue', data: mr?.revenue ?? [] },
+        { name: 'Target',  data: mr?.target  ?? [] },
+      ],
+      chart: { type: 'line' as const, height: 220, toolbar: { show: false }, fontFamily: 'Inter, sans-serif', background: 'transparent' },
+      xaxis: { categories: mr?.months ?? [], labels: { style: { fontSize: '12px', colors: '#64748b' } }, axisBorder: { show: false }, axisTicks: { show: false } },
+      colors: ['#1a7a4a', '#94a3b8'],
+      stroke: { curve: 'smooth' as const, width: [3, 2], dashArray: [0, 5] },
+      fill: { type: ['gradient', 'solid'], gradient: { opacityFrom: 0.15, opacityTo: 0.01 } },
+      markers: { size: 4, colors: ['#1a7a4a'], strokeColors: '#ffffff', strokeWidth: 2 },
+      grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
+      yaxis: { labels: { formatter: (v: number) => `₵${(v / 1000).toFixed(0)}k`, style: { fontSize: '11px', colors: '#64748b' } } },
+      tooltip: { theme: 'light', y: { formatter: (v: number) => `₵${v.toLocaleString()}` } },
+    };
+  });
 
   ngOnInit(): void {
-    this.store.setNotifications(3);
-  }
-
-  dismissAlert(id: string): void {
-    this.alerts.update(a => a.filter(x => x.id !== id));
+    this.dashStore.load();
   }
 }

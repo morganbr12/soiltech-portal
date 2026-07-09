@@ -54,15 +54,15 @@ import { CustomerStore } from '../../../store/customer.store';
             </div>
           </div>
           <apx-chart
-            [series]="growthChart.series"
-            [chart]="growthChart.chart"
-            [xaxis]="growthChart.xaxis"
-            [stroke]="growthChart.stroke"
-            [fill]="growthChart.fill"
-            [colors]="growthChart.colors"
-            [dataLabels]="growthChart.dataLabels"
-            [grid]="growthChart.grid"
-            [tooltip]="growthChart.tooltip"
+            [series]="growthChart().series"
+            [chart]="growthChart().chart"
+            [xaxis]="growthChart().xaxis"
+            [stroke]="growthChart().stroke"
+            [fill]="growthChart().fill"
+            [colors]="growthChart().colors"
+            [dataLabels]="growthChart().dataLabels"
+            [grid]="growthChart().grid"
+            [tooltip]="growthChart().tooltip"
           />
         </div>
 
@@ -95,13 +95,13 @@ import { CustomerStore } from '../../../store/customer.store';
             </div>
           </div>
           <apx-chart
-            [series]="revenueChart.series"
-            [chart]="revenueChart.chart"
-            [xaxis]="revenueChart.xaxis"
-            [colors]="revenueChart.colors"
-            [plotOptions]="revenueChart.plotOptions"
-            [dataLabels]="revenueChart.dataLabels"
-            [grid]="revenueChart.grid"
+            [series]="revenueChart().series"
+            [chart]="revenueChart().chart"
+            [xaxis]="revenueChart().xaxis"
+            [colors]="revenueChart().colors"
+            [plotOptions]="revenueChart().plotOptions"
+            [dataLabels]="revenueChart().dataLabels"
+            [grid]="revenueChart().grid"
           />
         </div>
 
@@ -147,7 +147,7 @@ import { CustomerStore } from '../../../store/customer.store';
             <tbody>
               @for (o of recentOrders(); track o.id) {
                 <tr>
-                  <td style="font-weight:600;color:var(--color-primary)">{{ o.id }}</td>
+                  <td style="font-weight:600;color:var(--color-primary)">{{ o.orderCode || o.id }}</td>
                   <td>{{ o.customerName }}</td>
                   <td>{{ o.produce }}</td>
                   <td style="font-weight:600">GHS {{ o.totalAmount.toLocaleString('en-GH', {maximumFractionDigits: 0}) }}</td>
@@ -341,27 +341,37 @@ export class CustomerDashboardComponent implements OnInit {
     };
   });
 
-  readonly growthChart = {
-    series: [{ name: 'New Customers', data: [14, 22, 18, 30, 26, 35, 42, 38, 50, 44, 58, 63] }],
-    chart: { type: 'area' as const, height: 200, toolbar: { show: false }, sparkline: { enabled: false } },
-    stroke: { curve: 'smooth' as const, width: 2.5 },
-    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 100] } },
-    colors: ['#1a7a4a'],
-    xaxis: { categories: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], labels: { style: { fontSize: '11px' } } },
-    dataLabels: { enabled: false },
-    grid: { borderColor: 'var(--color-border-light)', strokeDashArray: 4 },
-    tooltip: { theme: 'light' },
-  };
+  private static readonly MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  readonly revenueChart = {
-    series: [{ name: 'Revenue (GHS)', data: [48000, 62000, 55000, 78000, 91000, 84000, 105000, 98000, 120000, 115000, 132000, 148000] }],
-    chart: { type: 'bar' as const, height: 200, toolbar: { show: false } },
-    colors: ['#1a7a4a'],
-    xaxis: { categories: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], labels: { style: { fontSize: '11px' } } },
-    plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
-    dataLabels: { enabled: false },
-    grid: { borderColor: 'var(--color-border-light)', strokeDashArray: 4 },
-  };
+  readonly growthChart = computed(() => {
+    const d = this.store.dashboardSummary();
+    const data = d?.monthlyGrowth ?? [0,0,0,0,0,0,0,0,0,0,0,0];
+    return {
+      series: [{ name: 'New Customers', data }],
+      chart: { type: 'area' as const, height: 200, toolbar: { show: false } },
+      stroke: { curve: 'smooth' as const, width: 2.5 },
+      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 100] } },
+      colors: ['#1a7a4a'],
+      xaxis: { categories: CustomerDashboardComponent.MONTHS, labels: { style: { fontSize: '11px' } } },
+      dataLabels: { enabled: false },
+      grid: { borderColor: 'var(--color-border-light)', strokeDashArray: 4 },
+      tooltip: { theme: 'light' },
+    };
+  });
+
+  readonly revenueChart = computed(() => {
+    const d = this.store.dashboardSummary();
+    const data = d?.monthlyRevenue ?? [0,0,0,0,0,0,0,0,0,0,0,0];
+    return {
+      series: [{ name: 'Revenue (GHS)', data }],
+      chart: { type: 'bar' as const, height: 200, toolbar: { show: false } },
+      colors: ['#1a7a4a'],
+      xaxis: { categories: CustomerDashboardComponent.MONTHS, labels: { style: { fontSize: '11px' } } },
+      plotOptions: { bar: { borderRadius: 4, columnWidth: '60%' } },
+      dataLabels: { enabled: false },
+      grid: { borderColor: 'var(--color-border-light)', strokeDashArray: 4 },
+    };
+  });
 
   orderBadge(status: string): string {
     const map: Record<string, string> = {

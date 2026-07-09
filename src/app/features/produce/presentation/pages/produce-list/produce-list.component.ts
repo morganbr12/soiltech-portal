@@ -1,78 +1,129 @@
-import { Component, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
-import { MOCK_PRODUCE } from '../../../../../shared/data/mock-data';
-import { ProduceGrade } from '../../../../../core/enums/status.enum';
+import { ProduceStore } from '../../../store/produce.store';
+import { ProduceListing, ProduceStatus } from '../../../domain/produce.model';
 
-type Produce = typeof MOCK_PRODUCE[number];
+type ProduceRow = ProduceListing & Record<string, unknown>;
 
 @Component({
   selector: 'app-produce-list',
   standalone: true,
-  imports: [CommonModule, PageHeaderComponent, DataTableComponent],
+  imports: [CommonModule, FormsModule, PageHeaderComponent, DataTableComponent],
   template: `
     <div class="page-container">
       <app-page-header
         title="Produce Management"
-        subtitle="Track collection records, quality grades, and warehouse assignment"
+        subtitle="Track collection records, quality grades and availability"
         icon="eco"
-        [badge]="MOCK_PRODUCE.length"
+        [badge]="store.meta().total"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Produce' }]"
       >
         <button class="btn btn-secondary btn-sm">
           <span class="material-symbols-rounded">download</span> Export
         </button>
-        <button class="btn btn-primary btn-sm">
-          <span class="material-symbols-rounded">add</span> Record Produce
-        </button>
       </app-page-header>
 
+      <!-- Filter Bar -->
+      <div class="filter-bar">
+        <div class="filter-tabs">
+          @for (tab of statusTabs; track tab.value) {
+            <button class="filter-tab" [class.active]="activeStatus() === tab.value" (click)="setStatus(tab.value)">
+              {{ tab.label }}
+            </button>
+          }
+        </div>
+        <div class="filter-right">
+          <select class="filter-select" [(ngModel)]="cropFilter" (change)="doFilter()">
+            <option value="">All Crops</option>
+            @for (c of store.cropTypes(); track c) { <option [value]="c">{{ c }}</option> }
+          </select>
+          <select class="filter-select" [(ngModel)]="regionFilter" (change)="doFilter()">
+            <option value="">All Regions</option>
+            @for (r of store.regions(); track r) { <option [value]="r">{{ r }}</option> }
+          </select>
+        </div>
+      </div>
+
       <app-data-table
-        [data]="produce()"
+        [data]="store.listings()"
         [columns]="columns"
         [actions]="actions"
-        [loading]="loading()"
+        [loading]="store.isLoading()"
         [selectable]="true"
-        searchPlaceholder="Search produce records..."
+        [searchable]="true"
+        searchPlaceholder="Search by crop, agent, or farmer..."
       />
     </div>
-  `
+  `,
+  styles: [`
+    .filter-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+    .filter-tabs { display: flex; gap: 4px; background: var(--color-surface); border: 1px solid var(--color-border-light); border-radius: 10px; padding: 4px; }
+    .filter-tab { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border: none; border-radius: 7px; cursor: pointer; background: transparent; font-size: 0.875rem; font-weight: 500; color: var(--color-text-secondary); transition: all var(--transition-fast); font-family: inherit; &.active { background: var(--color-primary); color: white; } }
+    .filter-right { display: flex; gap: 8px; }
+    .filter-select { border: 1px solid var(--color-border); border-radius: 8px; padding: 7px 12px; font-size: 0.875rem; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; }
+  `]
 })
 export class ProduceListComponent implements OnInit {
-  readonly MOCK_PRODUCE = MOCK_PRODUCE;
-  readonly produce = signal(MOCK_PRODUCE as Produce[]);
-  readonly loading = signal(false);
+  protected readonly store = inject(ProduceStore);
 
-  readonly columns: Column<Produce>[] = [
-    { key: 'id', label: 'Record ID', width: '140px', sortable: true },
-    { key: 'farmerName', label: 'Farmer', type: 'avatar', sortable: true },
-    { key: 'agentName', label: 'Agent', sortable: true },
-    { key: 'cropType', label: 'Crop', sortable: true },
-    {
-      key: 'grade', label: 'Grade', type: 'status',
-      statusMap: {
-        [ProduceGrade.A]: { label: 'Grade A', class: 'badge--success' },
-        [ProduceGrade.B]: { label: 'Grade B', class: 'badge--info' },
-        [ProduceGrade.C]: { label: 'Grade C', class: 'badge--warning' },
-        [ProduceGrade.REJECTED]: { label: 'Rejected', class: 'badge--error' },
-      }
-    },
-    { key: 'weightKg', label: 'Weight (kg)', align: 'right', sortable: true },
-    { key: 'pricePerKg', label: 'Price/kg', align: 'right', format: (v) => `₵${v}` },
-    { key: 'totalValue', label: 'Total Value', type: 'currency', align: 'right', sortable: true },
-    { key: 'warehouseId', label: 'Warehouse' },
-    { key: 'collectionDate', label: 'Collected', type: 'date', sortable: true },
+  readonly activeStatus = signal('');
+  cropFilter   = '';
+  regionFilter = '';
+
+  readonly statusTabs = [
+    { label: 'All',       value: '' },
+    { label: 'Available', value: ProduceStatus.AVAILABLE },
+    { label: 'Reserved',  value: ProduceStatus.RESERVED },
+    { label: 'Sold Out',  value: ProduceStatus.SOLD_OUT },
+    { label: 'Unlisted',  value: ProduceStatus.UNLISTED },
   ];
 
-  readonly actions: TableAction<Produce>[] = [
+  readonly columns: Column<ProduceRow>[] = [
+    { key: 'cropType',           label: 'Crop',          sortable: true, width: '120px',
+      format: (v, row) => `${v}${row['cropVariety'] ? ' · ' + row['cropVariety'] : ''}` },
+    { key: 'grade',              label: 'Grade',         width: '100px' },
+    { key: 'farmerName',         label: 'Farmer',        sortable: true },
+    { key: 'agentName',          label: 'Agent',         sortable: true },
+    { key: 'lbcName',            label: 'LBC' },
+    { key: 'totalQuantityKg',    label: 'Total (kg)',    align: 'right', sortable: true,
+      format: (v) => Number(v).toLocaleString('en-GH', { maximumFractionDigits: 1 }) },
+    { key: 'availableQuantityKg', label: 'Available (kg)', align: 'right', sortable: true,
+      format: (v) => Number(v).toLocaleString('en-GH', { maximumFractionDigits: 1 }) },
+    { key: 'pricePerKg',         label: 'Price/kg',      align: 'right',
+      format: (v) => `GHS ${Number(v).toFixed(2)}` },
+    { key: 'region',             label: 'Region',        sortable: true },
+    { key: 'status',             label: 'Status',        type: 'status', align: 'center', width: '120px',
+      statusMap: {
+        [ProduceStatus.AVAILABLE]: { label: 'Available', class: 'badge--success' },
+        [ProduceStatus.RESERVED]:  { label: 'Reserved',  class: 'badge--info' },
+        [ProduceStatus.SOLD_OUT]:  { label: 'Sold Out',  class: 'badge--error' },
+        [ProduceStatus.UNLISTED]:  { label: 'Unlisted',  class: 'badge--neutral' },
+      }
+    },
+    { key: 'collectedAt', label: 'Collected', type: 'date', sortable: true, width: '130px' },
+  ];
+
+  readonly actions: TableAction<ProduceRow>[] = [
     { label: 'View', icon: 'visibility', handler: (r) => console.log('view', r.id) },
-    { label: 'Approve', icon: 'check_circle', color: '#16a34a', condition: (r) => r.status === 'pending', handler: (r) => console.log('approve', r.id) },
-    { label: 'Reject', icon: 'cancel', color: '#dc2626', condition: (r) => r.status === 'pending', handler: (r) => console.log('reject', r.id) },
   ];
 
   ngOnInit(): void {
-    this.loading.set(true);
-    setTimeout(() => this.loading.set(false), 600);
+    this.store.load({});
+  }
+
+  setStatus(status: string): void {
+    this.activeStatus.set(status);
+    this.doFilter();
+  }
+
+  doFilter(): void {
+    this.store.load({
+      status:   this.activeStatus() || undefined,
+      cropType: this.cropFilter    || undefined,
+      region:   this.regionFilter  || undefined,
+    });
   }
 }

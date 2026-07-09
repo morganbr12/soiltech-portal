@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
   FARMERS: `${API_BASE}/farmers`,
   FARMS: `${API_BASE}/farms`,
   PRODUCE: `${API_BASE}/produce`,
+  PRODUCE_LISTINGS: `${API_BASE}/produce-listings`,
   WAREHOUSES: `${API_BASE}/warehouses`,
   LOGISTICS: `${API_BASE}/logistics`,
   DRIVERS: `${API_BASE}/drivers`,

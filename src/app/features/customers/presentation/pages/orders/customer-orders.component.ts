@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
+import { ViewOrderDrawerComponent } from '../../components/view-order-drawer/view-order-drawer.component';
 import { CustomerStore } from '../../../store/customer.store';
 import { CustomerOrder, OrderStatus } from '../../../domain/customer.model';
 
@@ -11,8 +12,18 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
 @Component({
   selector: 'app-customer-orders',
   standalone: true,
-  imports: [CommonModule, FormsModule, PageHeaderComponent, DataTableComponent],
+  imports: [CommonModule, FormsModule, PageHeaderComponent, DataTableComponent, ViewOrderDrawerComponent],
   template: `
+    @if (selectedOrder()) {
+      <app-view-order-drawer
+        [order]="selectedOrder()!"
+        (closed)="selectedOrder.set(null)"
+        (approve)="approveOrder($event); selectedOrder.set(null)"
+        (deliver)="deliverOrderFromDrawer($event); selectedOrder.set(null)"
+        (cancel)="cancelOrderFromDrawer($event); selectedOrder.set(null)"
+      />
+    }
+
     <div class="page-container">
       <app-page-header
         title="Customer Orders"
@@ -100,8 +111,9 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
 export class CustomerOrdersComponent implements OnInit {
   protected readonly store = inject(CustomerStore);
 
-  readonly activeStatus = signal('all');
-  payFilter = '';
+  readonly activeStatus  = signal('all');
+  readonly selectedOrder = signal<CustomerOrder | null>(null);
+  payFilter    = '';
   regionFilter = '';
 
   readonly regions = computed(() =>
@@ -142,7 +154,7 @@ export class CustomerOrdersComponent implements OnInit {
 
   readonly columns: Column<OrderRow>[] = [
     { key: 'id', label: 'Order ID', width: '120px', sortable: true },
-    { key: 'customerName', label: 'Customer', sortable: true, type: 'avatar' },
+    { key: 'customerName', label: 'Customer', sortable: true },
     { key: 'produce', label: 'Produce', sortable: true },
     { key: 'quantityKg', label: 'Qty (kg)', type: 'number', align: 'right', sortable: true },
     { key: 'pricePerKg', label: 'Price/kg', align: 'right', format: (v) => `GHS ${Number(v).toFixed(2)}` },
@@ -165,12 +177,28 @@ export class CustomerOrdersComponent implements OnInit {
   ];
 
   readonly actions: TableAction<OrderRow>[] = [
-    { label: 'View', icon: 'visibility', handler: (r) => console.log('view', r.id) },
-    { label: 'Confirm', icon: 'check_circle', condition: (r) => r.status === OrderStatus.PENDING,
-      handler: (r) => this.confirmOrder(r) },
-    { label: 'Cancel', icon: 'cancel', color: '#dc2626',
+    { label: 'View', icon: 'visibility', handler: (r) => this.selectedOrder.set(r) },
+    {
+      label: 'Approve Order', icon: 'check_circle', color: '#16a34a',
+      condition: (r) => r.status === OrderStatus.PENDING,
+      handler: (r) => this.approveOrder(r),
+    },
+    {
+      label: 'Mark Delivered', icon: 'local_shipping', color: '#0284c7',
+      condition: (r) => r.status === OrderStatus.CONFIRMED || r.status === OrderStatus.PROCESSING,
+      handler: (r) => this.store.deliverOrder(r.id, {
+        onSuccess: () => this.store.loadOrders({}),
+        onError: (e) => console.error(e),
+      }),
+    },
+    {
+      label: 'Cancel', icon: 'cancel', color: '#dc2626',
       condition: (r) => r.status === OrderStatus.PENDING || r.status === OrderStatus.CONFIRMED,
-      handler: (r) => this.store.cancelOrder(r.id, '', { onSuccess: () => {}, onError: (e) => console.error(e) }) },
+      handler: (r) => this.store.cancelOrder(r.id, '', {
+        onSuccess: () => this.store.loadOrders({}),
+        onError: (e) => console.error(e),
+      }),
+    },
   ];
 
   ngOnInit(): void {
@@ -181,7 +209,24 @@ export class CustomerOrdersComponent implements OnInit {
   doFilter(): void {}
   createOrder(): void { console.log('create order'); }
 
-  confirmOrder(r: OrderRow): void {
-    this.store.confirmOrder(r.id, { onSuccess: () => {}, onError: (e) => console.error(e) });
+  approveOrder(r: CustomerOrder): void {
+    this.store.confirmOrder(r.id, {
+      onSuccess: () => this.store.loadOrders({}),
+      onError: (e) => console.error(e),
+    });
+  }
+
+  deliverOrderFromDrawer(r: CustomerOrder): void {
+    this.store.deliverOrder(r.id, {
+      onSuccess: () => this.store.loadOrders({}),
+      onError: (e) => console.error(e),
+    });
+  }
+
+  cancelOrderFromDrawer(r: CustomerOrder): void {
+    this.store.cancelOrder(r.id, '', {
+      onSuccess: () => this.store.loadOrders({}),
+      onError: (e) => console.error(e),
+    });
   }
 }

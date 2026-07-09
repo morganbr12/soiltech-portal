@@ -200,6 +200,7 @@ export interface CustomerDashboardSummary {
   };
   topCustomers: Array<{
     id: string;
+    customerCode: string;
     fullName: string;
     region: string;
     totalOrders: number;
@@ -209,6 +210,7 @@ export interface CustomerDashboardSummary {
   monthlyRevenue: number[];
   recentOrders: Array<{
     id: string;
+    orderCode: string;
     customerId: string;
     customerName: string;
     produce: string;

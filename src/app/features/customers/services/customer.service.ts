@@ -35,7 +35,7 @@ export class CustomerService {
 
   getDashboardSummary(): Observable<CustomerDashboardSummary> {
     return this.http
-      .get<ApiResponse<CustomerDashboardSummary>>(`${this.base}/dashboard/summary`)
+      .get<{ status: string; data: CustomerDashboardSummary }>(`${this.base}/dashboard`)
       .pipe(map(r => r.data));
   }
 

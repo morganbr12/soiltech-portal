@@ -254,6 +254,16 @@ export const CustomerStore = signalStore(
       });
     },
 
+    deliverOrder(id: string, callbacks: Callbacks): void {
+      svc.deliverOrder(id).subscribe({
+        next: updated => {
+          patchState(store, { orders: store.orders().map(o => o.id === id ? { ...o, ...updated } : o) });
+          callbacks.onSuccess();
+        },
+        error: (e: HttpErr) => callbacks.onError(errMsg(e, 'Deliver failed')),
+      });
+    },
+
     // ── Wallets ────────────────────────────────────────────────────────
 
     loadWallets: rxMethod<CustomerWalletQueryParams>(
