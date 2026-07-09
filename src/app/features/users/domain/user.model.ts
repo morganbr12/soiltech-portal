@@ -13,6 +13,27 @@ export interface PortalUser extends Record<string, unknown> {
   createdAt: string;
 }
 
+export interface UserQueryParams {
+  role?: string;
+  is_active?: boolean;
+  search?: string;
+  page?: number;
+  per_page?: number;
+}
+
+export interface UserListMeta {
+  page: number;
+  perPage: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface UserListResponse {
+  success: boolean;
+  data: PortalUser[];
+  meta: UserListMeta;
+}
+
 export interface CreateUserPayload {
   fullName: string;
   email: string;
