@@ -13,7 +13,7 @@ import {
   CustomerDashboardSummary,
   CustomerQueryParams, CustomerOrderQueryParams, CustomerWalletQueryParams,
   CustomerReviewQueryParams, CustomerChatQueryParams,
-  SendNotificationRequest,
+  SendNotificationRequest, DispatchDriverPayload,
 } from '../domain/customer.model';
 
 type Callbacks = { onSuccess: () => void; onError: (msg: string) => void };
@@ -261,6 +261,20 @@ export const CustomerStore = signalStore(
           callbacks.onSuccess();
         },
         error: (e: HttpErr) => callbacks.onError(errMsg(e, 'Deliver failed')),
+      });
+    },
+
+    dispatchDriver(orderId: string, payload: DispatchDriverPayload, callbacks: Callbacks): void {
+      svc.dispatchDriver(orderId, payload).subscribe({
+        next: () => callbacks.onSuccess(),
+        error: (e: HttpErr) => callbacks.onError(errMsg(e, 'Dispatch failed')),
+      });
+    },
+
+    updateDispatchStatus(dispatchId: string, status: string, callbacks: Callbacks): void {
+      svc.updateDispatchStatus(dispatchId, status).subscribe({
+        next: () => callbacks.onSuccess(),
+        error: (e: HttpErr) => callbacks.onError(errMsg(e, 'Status update failed')),
       });
     },
 

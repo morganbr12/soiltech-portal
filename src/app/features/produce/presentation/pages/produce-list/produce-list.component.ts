@@ -1,18 +1,28 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PageHeaderComponent } from '../../../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, Column, TableAction } from '../../../../../shared/components/data-table/data-table.component';
+import { ViewProduceDrawerComponent } from '../../components/view-produce-drawer/view-produce-drawer.component';
 import { ProduceStore } from '../../../store/produce.store';
 import { ProduceListing, ProduceStatus } from '../../../domain/produce.model';
+import { ToastService } from '../../../../../shared/services/toast.service';
 
 type ProduceRow = ProduceListing & Record<string, unknown>;
 
 @Component({
   selector: 'app-produce-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, PageHeaderComponent, DataTableComponent],
+  imports: [CommonModule, FormsModule, PageHeaderComponent, DataTableComponent, ViewProduceDrawerComponent],
   template: `
+    @if (selectedListing()) {
+      <app-view-produce-drawer
+        [listing]="selectedListing()!"
+        (closed)="selectedListing.set(null)"
+        (updated)="selectedListing.set(null)"
+      />
+    }
+
     <div class="page-container">
       <app-page-header
         title="Produce Management"
@@ -68,17 +78,21 @@ type ProduceRow = ProduceListing & Record<string, unknown>;
 })
 export class ProduceListComponent implements OnInit {
   protected readonly store = inject(ProduceStore);
+  private readonly toast = inject(ToastService);
 
-  readonly activeStatus = signal('');
+  readonly activeStatus    = signal('');
+  readonly selectedListing = signal<ProduceListing | null>(null);
+  readonly savingId        = signal<string | null>(null);
   cropFilter   = '';
   regionFilter = '';
 
   readonly statusTabs = [
-    { label: 'All',       value: '' },
-    { label: 'Available', value: ProduceStatus.AVAILABLE },
-    { label: 'Reserved',  value: ProduceStatus.RESERVED },
-    { label: 'Sold Out',  value: ProduceStatus.SOLD_OUT },
-    { label: 'Unlisted',  value: ProduceStatus.UNLISTED },
+    { label: 'All',              value: '' },
+    { label: 'Pending Review',   value: ProduceStatus.PENDING_APPROVAL },
+    { label: 'Available',        value: ProduceStatus.AVAILABLE },
+    { label: 'Reserved',         value: ProduceStatus.RESERVED },
+    { label: 'Sold Out',         value: ProduceStatus.SOLD_OUT },
+    { label: 'Unlisted',         value: ProduceStatus.UNLISTED },
   ];
 
   readonly columns: Column<ProduceRow>[] = [
@@ -95,19 +109,56 @@ export class ProduceListComponent implements OnInit {
     { key: 'pricePerKg',         label: 'Price/kg',      align: 'right',
       format: (v) => `GHS ${Number(v).toFixed(2)}` },
     { key: 'region',             label: 'Region',        sortable: true },
-    { key: 'status',             label: 'Status',        type: 'status', align: 'center', width: '120px',
+    { key: 'status',             label: 'Status',        type: 'status', align: 'center', width: '150px',
       statusMap: {
-        [ProduceStatus.AVAILABLE]: { label: 'Available', class: 'badge--success' },
-        [ProduceStatus.RESERVED]:  { label: 'Reserved',  class: 'badge--info' },
-        [ProduceStatus.SOLD_OUT]:  { label: 'Sold Out',  class: 'badge--error' },
-        [ProduceStatus.UNLISTED]:  { label: 'Unlisted',  class: 'badge--neutral' },
+        [ProduceStatus.PENDING_APPROVAL]: { label: 'Pending Review', class: 'badge--warning' },
+        [ProduceStatus.AVAILABLE]:        { label: 'Available',      class: 'badge--success' },
+        [ProduceStatus.RESERVED]:         { label: 'Reserved',       class: 'badge--info' },
+        [ProduceStatus.SOLD_OUT]:         { label: 'Sold Out',       class: 'badge--error' },
+        [ProduceStatus.UNLISTED]:         { label: 'Unlisted',       class: 'badge--neutral' },
       }
     },
     { key: 'collectedAt', label: 'Collected', type: 'date', sortable: true, width: '130px' },
   ];
 
   readonly actions: TableAction<ProduceRow>[] = [
-    { label: 'View', icon: 'visibility', handler: (r) => console.log('view', r.id) },
+    { label: 'View', icon: 'visibility', handler: (r) => this.selectedListing.set(r) },
+    {
+      label: 'Approve', icon: 'check_circle', color: '#16a34a',
+      condition: (r) => r.status === ProduceStatus.PENDING_APPROVAL && this.savingId() !== r.id,
+      handler: (r) => {
+        this.savingId.set(r.id);
+        this.store.approve(
+          r.id,
+          () => {
+            this.savingId.set(null);
+            this.toast.success('Listing approved successfully');
+          },
+          () => {
+            this.savingId.set(null);
+            this.toast.error('Failed to approve listing. Please try again.');
+          },
+        );
+      },
+    },
+    {
+      label: 'Reject', icon: 'cancel', color: '#dc2626',
+      condition: (r) => r.status === ProduceStatus.PENDING_APPROVAL && this.savingId() !== r.id,
+      handler: (r) => {
+        this.savingId.set(r.id);
+        this.store.reject(
+          r.id,
+          () => {
+            this.savingId.set(null);
+            this.toast.success('Listing rejected');
+          },
+          () => {
+            this.savingId.set(null);
+            this.toast.error('Failed to reject listing. Please try again.');
+          },
+        );
+      },
+    },
   ];
 
   ngOnInit(): void {

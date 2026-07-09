@@ -5,11 +5,12 @@ import { FormsModule } from '@angular/forms';
 import { AppStore } from '../../../state/app.store';
 import { ThemeService } from '../../../services/theme.service';
 import { AuthService } from '../../../authentication/auth.service';
+import { NotificationBellComponent } from '../../../../features/notifications/presentation/components/notification-bell/notification-bell.component';
 
 @Component({
   selector: 'app-header',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule],
+  imports: [CommonModule, RouterLink, FormsModule, NotificationBellComponent],
   template: `
     <header class="header">
       <div class="header__left">
@@ -41,12 +42,7 @@ import { AuthService } from '../../../authentication/auth.service';
         </button>
 
         <!-- Notifications -->
-        <button class="header-btn notification-btn" title="Notifications">
-          <span class="material-symbols-rounded">notifications</span>
-          @if (store.notifications() > 0) {
-            <span class="notification-dot">{{ store.notifications() }}</span>
-          }
-        </button>
+        <app-notification-bell />
 
         <!-- Help -->
         <button class="header-btn" title="Help & Support">
@@ -174,19 +170,6 @@ import { AuthService } from '../../../authentication/auth.service';
       font-family: inherit;
       border: 1px solid var(--color-border);
       white-space: nowrap;
-    }
-
-    .notification-btn .notification-dot {
-      position: absolute;
-      top: 4px; right: 4px;
-      width: 16px; height: 16px;
-      background: var(--color-error);
-      border-radius: 50%;
-      font-size: 0.625rem;
-      font-weight: 700;
-      color: white;
-      display: flex; align-items: center; justify-content: center;
-      border: 2px solid var(--color-surface);
     }
 
     .user-menu {

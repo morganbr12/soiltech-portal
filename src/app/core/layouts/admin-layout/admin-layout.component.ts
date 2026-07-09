@@ -5,11 +5,12 @@ import { AppStore } from '../../state/app.store';
 import { ThemeService } from '../../services/theme.service';
 import { SidebarComponent } from './sidebar/sidebar.component';
 import { HeaderComponent } from './header/header.component';
+import { ToastComponent } from '../../../shared/components/toast/toast.component';
 
 @Component({
   selector: 'app-admin-layout',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, SidebarComponent, HeaderComponent],
+  imports: [CommonModule, RouterOutlet, SidebarComponent, HeaderComponent, ToastComponent],
   template: `
     <div class="admin-layout" [class.sidebar-collapsed]="store.sidebarCollapsed()">
       <app-sidebar />
@@ -22,6 +23,8 @@ import { HeaderComponent } from './header/header.component';
         </main>
       </div>
     </div>
+
+    <app-toast />
   `,
   styles: [`
     .admin-layout {

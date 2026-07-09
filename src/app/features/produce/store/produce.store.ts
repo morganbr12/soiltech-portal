@@ -37,5 +37,25 @@ export const ProduceStore = signalStore(
         )
       )
     ),
+
+    approve(id: string, onSuccess: () => void, onError: (msg: string) => void): void {
+      svc.approve(id).subscribe({
+        next: updated => {
+          patchState(store, { listings: store.listings().map(l => l.id === id ? { ...l, ...updated } : l) });
+          onSuccess();
+        },
+        error: () => onError('Approval failed'),
+      });
+    },
+
+    reject(id: string, onSuccess: () => void, onError: (msg: string) => void): void {
+      svc.reject(id).subscribe({
+        next: updated => {
+          patchState(store, { listings: store.listings().map(l => l.id === id ? { ...l, ...updated } : l) });
+          onSuccess();
+        },
+        error: () => onError('Rejection failed'),
+      });
+    },
   }))
 );

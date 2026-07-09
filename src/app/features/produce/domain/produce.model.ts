@@ -1,8 +1,9 @@
 export enum ProduceStatus {
-  AVAILABLE = 'AVAILABLE',
-  RESERVED  = 'RESERVED',
-  SOLD_OUT  = 'SOLD_OUT',
-  UNLISTED  = 'UNLISTED',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  AVAILABLE        = 'AVAILABLE',
+  RESERVED         = 'RESERVED',
+  SOLD_OUT         = 'SOLD_OUT',
+  UNLISTED         = 'UNLISTED',
 }
 
 export interface ProduceListing extends Record<string, unknown> {

@@ -12,6 +12,7 @@ import {
   CustomerQueryParams, CustomerOrderQueryParams, CustomerWalletQueryParams,
   CustomerReviewQueryParams, CustomerChatQueryParams,
   CreateCustomerRequest, CreateOrderRequest, SendNotificationRequest,
+  DispatchDriverPayload,
 } from '../domain/customer.model';
 
 function toHttpParams(obj: Record<string, unknown>): HttpParams {
@@ -102,11 +103,7 @@ export class CustomerService {
 
   listOrders(params: CustomerOrderQueryParams = {}): Observable<CustomerOrderListResponse> {
     return this.http
-      .get<CustomerOrderListResponse>(`${this.base}/orders`, { params: toHttpParams(params as Record<string, unknown>) })
-      .pipe(map(res => ({
-        ...res,
-        data: res.data.map(o => lowerStatus(o) as CustomerOrder),
-      })));
+      .get<CustomerOrderListResponse>(`${this.base}/orders`, { params: toHttpParams(params as Record<string, unknown>) });
   }
 
   createOrder(payload: CreateOrderRequest): Observable<CustomerOrder> {
@@ -130,6 +127,18 @@ export class CustomerService {
   deliverOrder(id: string): Observable<CustomerOrder> {
     return this.http
       .patch<ApiResponse<CustomerOrder>>(`${this.base}/orders/${id}/deliver`, {})
+      .pipe(map(r => r.data));
+  }
+
+  dispatchDriver(orderId: string, payload: DispatchDriverPayload): Observable<{ id: string; [key: string]: unknown }> {
+    return this.http
+      .post<ApiResponse<{ id: string; [key: string]: unknown }>>(`${this.base}/orders/${orderId}/dispatch-driver`, payload)
+      .pipe(map(r => r.data));
+  }
+
+  updateDispatchStatus(dispatchId: string, status: string): Observable<unknown> {
+    return this.http
+      .patch<ApiResponse<unknown>>(`${API_ENDPOINTS.DISPATCHES}/${dispatchId}/status`, { status })
       .pipe(map(r => r.data));
   }
 

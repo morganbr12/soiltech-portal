@@ -14,11 +14,29 @@ export enum CustomerTier {
 }
 
 export enum OrderStatus {
-  PENDING    = 'pending',
-  CONFIRMED  = 'confirmed',
-  PROCESSING = 'processing',
-  DELIVERED  = 'delivered',
-  CANCELLED  = 'cancelled',
+  PENDING           = 'pending',
+  CONFIRMED         = 'confirmed',
+  PROCESSING        = 'processing',
+  AGENT_CONFIRMED   = 'agentConfirmed',
+  DRIVER_DISPATCHED = 'driverDispatched',
+  SHIPPED           = 'shipped',
+  DELIVERED         = 'delivered',
+  CANCELLED         = 'cancelled',
+}
+
+export enum DispatchStatus {
+  PENDING   = 'pending',
+  EN_ROUTE  = 'enRoute',
+  PICKED_UP = 'pickedUp',
+  DELIVERED = 'delivered',
+  CANCELLED = 'cancelled',
+}
+
+export interface DispatchDriverPayload {
+  vehicleId: string;
+  scheduledDate: string;
+  pickupLocation: string;
+  notes?: string;
 }
 
 export enum WalletStatus {
@@ -83,6 +101,7 @@ export interface Customer extends Record<string, unknown> {
 
 export interface CustomerOrder extends Record<string, unknown> {
   id: string;
+  orderCode?: string;
   customerId: string;
   customerName: string;
   produce: string;
@@ -93,6 +112,8 @@ export interface CustomerOrder extends Record<string, unknown> {
   paymentStatus: 'unpaid' | 'partial' | 'paid';
   assignedAgent?: string;
   assignedDriver?: string;
+  dispatchId?: string;
+  vehiclePlate?: string;
   orderDate: string;
   deliveryDate?: string;
   region: string;
@@ -144,8 +165,8 @@ export interface CustomerChat extends Record<string, unknown> {
   id: string;
   customerId: string;
   customerName: string;
-  agentId?: string;
-  agentName?: string;
+  lbcId?: string;
+  lbcName?: string;
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
@@ -157,7 +178,7 @@ export interface CustomerChat extends Record<string, unknown> {
 export interface ChatMessage {
   id: string;
   chatId: string;
-  senderType: 'customer' | 'agent' | 'system';
+  senderType: 'customer' | 'lbc' | 'system';
   senderId: string;
   senderName: string;
   message: string;

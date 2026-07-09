@@ -18,9 +18,7 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
       <app-view-order-drawer
         [order]="selectedOrder()!"
         (closed)="selectedOrder.set(null)"
-        (approve)="approveOrder($event); selectedOrder.set(null)"
-        (deliver)="deliverOrderFromDrawer($event); selectedOrder.set(null)"
-        (cancel)="cancelOrderFromDrawer($event); selectedOrder.set(null)"
+        (orderUpdated)="onOrderUpdated()"
       />
     }
 
@@ -29,7 +27,7 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
         title="Customer Orders"
         subtitle="Manage and track all buyer orders across the supply chain"
         icon="shopping_bag"
-        [badge]="store.orders().length"
+        [badge]="store.orderSummary().total"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Customers', url: '/customers' }, { label: 'Orders' }]"
       >
         <button class="btn btn-secondary btn-sm">
@@ -101,8 +99,8 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
     .qs-value { font-size: 1.375rem; font-weight: 700; color: var(--color-text-primary); line-height: 1; }
     .qs-label { font-size: 0.75rem; color: var(--color-text-muted); margin-top: 2px; }
     .filter-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
-    .filter-tabs { display: flex; gap: 4px; background: var(--color-surface); border: 1px solid var(--color-border-light); border-radius: 10px; padding: 4px; }
-    .filter-tab { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border: none; border-radius: 7px; cursor: pointer; background: transparent; font-size: 0.875rem; font-weight: 500; color: var(--color-text-secondary); transition: all var(--transition-fast); font-family: inherit; &.active { background: var(--color-primary); color: white; .tab-count { background: rgba(255,255,255,0.25); color: white; } } }
+    .filter-tabs { display: flex; gap: 4px; background: var(--color-surface); border: 1px solid var(--color-border-light); border-radius: 10px; padding: 4px; flex-wrap: wrap; }
+    .filter-tab { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border: none; border-radius: 7px; cursor: pointer; background: transparent; font-size: 0.8125rem; font-weight: 500; color: var(--color-text-secondary); transition: all var(--transition-fast); font-family: inherit; &.active { background: var(--color-primary); color: white; .tab-count { background: rgba(255,255,255,0.25); color: white; } } }
     .tab-count { background: var(--color-border-light); color: var(--color-text-muted); font-size: 0.6875rem; font-weight: 700; padding: 1px 6px; border-radius: 99px; }
     .filter-right { display: flex; gap: 8px; }
     .filter-select { border: 1px solid var(--color-border); border-radius: 8px; padding: 7px 12px; font-size: 0.875rem; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; }
@@ -123,54 +121,67 @@ export class CustomerOrdersComponent implements OnInit {
   readonly stats = computed(() => {
     const s = this.store.orderSummary();
     return [
-      { label: 'Total Orders', value: s.total, icon: 'shopping_bag', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
-      { label: 'Delivered', value: s.delivered, icon: 'local_shipping', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
-      { label: 'Processing', value: s.processing + s.confirmed, icon: 'autorenew', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
-      { label: 'Pending', value: s.pending, icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
-      { label: 'Unpaid', value: s.unpaid, icon: 'money_off', color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
-      { label: 'Total Value', value: 'GHS ' + (s.totalValue / 1000).toFixed(0) + 'K', icon: 'payments', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
+      { label: 'Total Orders', value: s.total,                   icon: 'shopping_bag',   color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
+      { label: 'Delivered',    value: s.delivered,               icon: 'local_shipping', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
+      { label: 'In Progress',  value: s.processing + s.confirmed, icon: 'autorenew',      color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
+      { label: 'Pending',      value: s.pending,                  icon: 'pending',         color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
+      { label: 'Unpaid',       value: s.unpaid,                   icon: 'money_off',       color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
+      { label: 'Total Value',  value: 'GHS ' + (s.totalValue / 1000).toFixed(0) + 'K', icon: 'payments', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
     ];
   });
 
   readonly statusTabs = computed(() => {
-    const s = this.store.orderSummary();
+    const orders = this.store.orders();
+    const count  = (s: string) => orders.filter(o => o.status === s).length;
+    const s      = this.store.orderSummary();
     return [
-      { label: 'All', value: 'all', count: s.total },
-      { label: 'Pending', value: OrderStatus.PENDING, count: s.pending },
-      { label: 'Confirmed', value: OrderStatus.CONFIRMED, count: s.confirmed },
-      { label: 'Processing', value: OrderStatus.PROCESSING, count: s.processing },
-      { label: 'Delivered', value: OrderStatus.DELIVERED, count: s.delivered },
-      { label: 'Cancelled', value: OrderStatus.CANCELLED, count: s.cancelled },
+      { label: 'All',            value: 'all',                          count: s.total },
+      { label: 'Pending',        value: OrderStatus.PENDING,            count: count(OrderStatus.PENDING) },
+      { label: 'Confirmed',      value: OrderStatus.CONFIRMED,          count: count(OrderStatus.CONFIRMED) },
+      { label: 'Agent Confirmed',value: OrderStatus.AGENT_CONFIRMED,    count: count(OrderStatus.AGENT_CONFIRMED) },
+      { label: 'Dispatched',     value: OrderStatus.DRIVER_DISPATCHED,  count: count(OrderStatus.DRIVER_DISPATCHED) },
+      { label: 'Shipped',        value: OrderStatus.SHIPPED,            count: count(OrderStatus.SHIPPED) },
+      { label: 'Delivered',      value: OrderStatus.DELIVERED,          count: count(OrderStatus.DELIVERED) },
+      { label: 'Cancelled',      value: OrderStatus.CANCELLED,          count: count(OrderStatus.CANCELLED) },
     ];
   });
 
   readonly filteredOrders = computed(() => {
     let data = this.store.orders() as OrderRow[];
     if (this.activeStatus() !== 'all') data = data.filter(o => o.status === this.activeStatus());
-    if (this.payFilter) data = data.filter(o => o.paymentStatus === this.payFilter);
+    if (this.payFilter)    data = data.filter(o => o.paymentStatus === this.payFilter);
     if (this.regionFilter) data = data.filter(o => o.region === this.regionFilter);
     return data;
   });
 
   readonly columns: Column<OrderRow>[] = [
-    { key: 'id', label: 'Order ID', width: '120px', sortable: true },
+    { key: 'orderCode', label: 'Order ID', width: '130px', sortable: true,
+      format: (v, row) => (v as string) || (row['id'] as string) },
     { key: 'customerName', label: 'Customer', sortable: true },
-    { key: 'produce', label: 'Produce', sortable: true },
-    { key: 'quantityKg', label: 'Qty (kg)', type: 'number', align: 'right', sortable: true },
-    { key: 'pricePerKg', label: 'Price/kg', align: 'right', format: (v) => `GHS ${Number(v).toFixed(2)}` },
-    { key: 'totalAmount', label: 'Total', type: 'currency', align: 'right', sortable: true },
+    { key: 'produce',      label: 'Produce',  sortable: true },
+    { key: 'quantityKg',   label: 'Qty (kg)', type: 'number', align: 'right', sortable: true },
+    { key: 'pricePerKg',   label: 'Price/kg', align: 'right',
+      format: (v) => `GHS ${Number(v).toFixed(2)}` },
+    { key: 'totalAmount',  label: 'Total',    type: 'currency', align: 'right', sortable: true },
     { key: 'assignedAgent', label: 'Agent' },
-    { key: 'region', label: 'Region', sortable: true },
+    { key: 'region',        label: 'Region', sortable: true },
     { key: 'paymentStatus', label: 'Payment', type: 'status',
-      statusMap: { unpaid: { label: 'Unpaid', class: 'badge--error' }, partial: { label: 'Partial', class: 'badge--warning' }, paid: { label: 'Paid', class: 'badge--success' } }
+      statusMap: {
+        unpaid:  { label: 'Unpaid',  class: 'badge--error' },
+        partial: { label: 'Partial', class: 'badge--warning' },
+        paid:    { label: 'Paid',    class: 'badge--success' },
+      }
     },
     { key: 'status', label: 'Status', type: 'status',
       statusMap: {
-        [OrderStatus.PENDING]: { label: 'Pending', class: 'badge--warning' },
-        [OrderStatus.CONFIRMED]: { label: 'Confirmed', class: 'badge--info' },
-        [OrderStatus.PROCESSING]: { label: 'Processing', class: 'badge--info' },
-        [OrderStatus.DELIVERED]: { label: 'Delivered', class: 'badge--success' },
-        [OrderStatus.CANCELLED]: { label: 'Cancelled', class: 'badge--error' },
+        [OrderStatus.PENDING]:           { label: 'Pending',         class: 'badge--warning' },
+        [OrderStatus.CONFIRMED]:         { label: 'Confirmed',       class: 'badge--info' },
+        [OrderStatus.PROCESSING]:        { label: 'Processing',      class: 'badge--info' },
+        [OrderStatus.AGENT_CONFIRMED]:   { label: 'Agent Confirmed', class: 'badge--purple' },
+        [OrderStatus.DRIVER_DISPATCHED]: { label: 'Dispatched',      class: 'badge--info' },
+        [OrderStatus.SHIPPED]:           { label: 'Shipped',         class: 'badge--info' },
+        [OrderStatus.DELIVERED]:         { label: 'Delivered',       class: 'badge--success' },
+        [OrderStatus.CANCELLED]:         { label: 'Cancelled',       class: 'badge--error' },
       }
     },
     { key: 'orderDate', label: 'Date', type: 'date', sortable: true },
@@ -179,24 +190,21 @@ export class CustomerOrdersComponent implements OnInit {
   readonly actions: TableAction<OrderRow>[] = [
     { label: 'View', icon: 'visibility', handler: (r) => this.selectedOrder.set(r) },
     {
-      label: 'Approve Order', icon: 'check_circle', color: '#16a34a',
+      label: 'Confirm Order', icon: 'check_circle', color: '#16a34a',
       condition: (r) => r.status === OrderStatus.PENDING,
-      handler: (r) => this.approveOrder(r),
-    },
-    {
-      label: 'Mark Delivered', icon: 'local_shipping', color: '#0284c7',
-      condition: (r) => r.status === OrderStatus.CONFIRMED || r.status === OrderStatus.PROCESSING,
-      handler: (r) => this.store.deliverOrder(r.id, {
+      handler:   (r) => this.store.confirmOrder(r.id, {
         onSuccess: () => this.store.loadOrders({}),
-        onError: (e) => console.error(e),
+        onError:   (e) => console.error(e),
       }),
     },
     {
       label: 'Cancel', icon: 'cancel', color: '#dc2626',
-      condition: (r) => r.status === OrderStatus.PENDING || r.status === OrderStatus.CONFIRMED,
+      condition: (r) => r.status === OrderStatus.PENDING
+                     || r.status === OrderStatus.CONFIRMED
+                     || r.status === OrderStatus.AGENT_CONFIRMED,
       handler: (r) => this.store.cancelOrder(r.id, '', {
         onSuccess: () => this.store.loadOrders({}),
-        onError: (e) => console.error(e),
+        onError:   (e) => console.error(e),
       }),
     },
   ];
@@ -209,24 +217,8 @@ export class CustomerOrdersComponent implements OnInit {
   doFilter(): void {}
   createOrder(): void { console.log('create order'); }
 
-  approveOrder(r: CustomerOrder): void {
-    this.store.confirmOrder(r.id, {
-      onSuccess: () => this.store.loadOrders({}),
-      onError: (e) => console.error(e),
-    });
-  }
-
-  deliverOrderFromDrawer(r: CustomerOrder): void {
-    this.store.deliverOrder(r.id, {
-      onSuccess: () => this.store.loadOrders({}),
-      onError: (e) => console.error(e),
-    });
-  }
-
-  cancelOrderFromDrawer(r: CustomerOrder): void {
-    this.store.cancelOrder(r.id, '', {
-      onSuccess: () => this.store.loadOrders({}),
-      onError: (e) => console.error(e),
-    });
+  onOrderUpdated(): void {
+    this.store.loadOrders({});
+    this.selectedOrder.set(null);
   }
 }

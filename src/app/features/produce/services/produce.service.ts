@@ -30,4 +30,16 @@ export class ProduceService {
         })),
       })));
   }
+
+  approve(id: string): Observable<ProduceListing> {
+    return this.http
+      .patch<{ status: string; data: ProduceListing }>(`${this.base}/${id}/approve`, {})
+      .pipe(map(r => r.data));
+  }
+
+  reject(id: string): Observable<ProduceListing> {
+    return this.http
+      .patch<{ status: string; data: ProduceListing }>(`${this.base}/${id}/reject`, {})
+      .pipe(map(r => r.data));
+  }
 }
