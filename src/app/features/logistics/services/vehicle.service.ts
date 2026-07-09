@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
-import { API_ENDPOINTS } from '../../../../core/constants/api.constants';
+import { API_ENDPOINTS } from '../../../core/constants/api.constants';
 import { Vehicle, VehicleQueryParams, VehicleListMeta, CreateVehiclePayload } from '../domain/vehicle.model';
 
 export interface VehicleKpis {
