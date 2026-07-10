@@ -38,7 +38,9 @@ type FarmRow = Farm & Record<string, unknown>;
           </select>
           <select class="filter-select" [(ngModel)]="cropFilter" (change)="doFilter()">
             <option value="">All Crops</option>
-            @for (c of store.cropTypes(); track c) { <option [value]="c">{{ c }}</option> }
+            @for (c of store.cropTypes(); track c) {
+              <option [value]="c">{{ titleCase(c) }}</option>
+            }
           </select>
         </div>
       </div>
@@ -70,7 +72,8 @@ export class FarmsListComponent implements OnInit {
     { key: 'farmerName',       label: 'Farmer',         type: 'avatar', sortable: true },
     { key: 'region',           label: 'Region',         sortable: true },
     { key: 'district',         label: 'District' },
-    { key: 'cropType',         label: 'Crop',           sortable: true },
+    { key: 'cropType',         label: 'Crop',           sortable: true,
+      format: (v) => String(v).charAt(0).toUpperCase() + String(v).slice(1).toLowerCase() },
     { key: 'sizeHectares',     label: 'Size (ha)',      align: 'right', sortable: true,
       format: (v) => v != null ? Number(v).toLocaleString('en-GH', { maximumFractionDigits: 2 }) : '—' },
     { key: 'estimatedYieldKg', label: 'Est. Yield (kg)', align: 'right', sortable: true,
@@ -84,6 +87,10 @@ export class FarmsListComponent implements OnInit {
     { label: 'View on Map',  icon: 'map',          color: '#0284c7', handler: (r) => console.log('map', r.farmId) },
     { label: 'Edit Farm',    icon: 'edit',         handler: (r) => console.log('edit', r.farmId) },
   ];
+
+  titleCase(s: string): string {
+    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  }
 
   ngOnInit(): void {
     this.store.load({});
