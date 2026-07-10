@@ -30,8 +30,7 @@ function lowerStatus<T extends { status: string }>(item: T): T {
 @Injectable({ providedIn: 'root' })
 export class CustomerService {
   private readonly http = inject(HttpClient);
-  private readonly base   = API_ENDPOINTS.CUSTOMERS;
-  private readonly orders = API_ENDPOINTS.ORDERS;
+  private readonly base = API_ENDPOINTS.CUSTOMERS;
 
   // ── Dashboard ──────────────────────────────────────────────────────────
 
@@ -133,7 +132,7 @@ export class CustomerService {
 
   dispatchDriver(orderId: string, payload: DispatchDriverPayload): Observable<{ id: string; [key: string]: unknown }> {
     return this.http
-      .post<ApiResponse<{ id: string; [key: string]: unknown }>>(`${this.orders}/${orderId}/dispatch-driver`, payload)
+      .post<ApiResponse<{ id: string; [key: string]: unknown }>>(`${this.base}/orders/${orderId}/dispatch-driver`, payload)
       .pipe(map(r => r.data));
   }
 
