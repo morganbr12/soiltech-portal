@@ -282,14 +282,14 @@ export class CustomerDashboardComponent implements OnInit {
       ];
     }
     const s = this.store.customerSummary();
-    const o = this.store.orderSummary();
+    const m = this.store.ordersMeta();
     return [
       { label: 'Total Customers', value: s.total.toLocaleString(), icon: 'people', color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)', delta: 12 },
       { label: 'Active Buyers', value: (s.active + s.verified).toLocaleString(), icon: 'person_check', color: '#0284c7', bg: 'rgba(2,132,199,0.1)', delta: 8 },
       { label: 'Pending Verify', value: s.pending.toLocaleString(), icon: 'pending', color: '#d97706', bg: 'rgba(217,119,6,0.1)', delta: -3 },
-      { label: 'Total Revenue', value: o.totalValue ? 'GHS ' + (o.totalValue / 1000).toFixed(0) + 'K' : 'GHS 0K', icon: 'payments', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)', delta: 18 },
+      { label: 'Total Revenue', value: '—', icon: 'payments', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)', delta: 18 },
       { label: 'Avg Rating', value: '—', icon: 'star', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', delta: 2 },
-      { label: 'Total Orders', value: o.total.toLocaleString(), icon: 'shopping_bag', color: '#059669', bg: 'rgba(5,150,105,0.1)', delta: 21 },
+      { label: 'Total Orders', value: m.total.toLocaleString(), icon: 'shopping_bag', color: '#059669', bg: 'rgba(5,150,105,0.1)', delta: 21 },
     ];
   });
 

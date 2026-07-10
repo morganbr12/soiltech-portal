@@ -13,7 +13,7 @@ import {
   CustomerDashboardSummary,
   CustomerQueryParams, CustomerOrderQueryParams, CustomerWalletQueryParams,
   CustomerReviewQueryParams, CustomerChatQueryParams,
-  SendNotificationRequest, DispatchDriverPayload,
+  SendNotificationRequest,
 } from '../domain/customer.model';
 
 type Callbacks = { onSuccess: () => void; onError: (msg: string) => void };
@@ -26,9 +26,8 @@ interface CustomerSummary {
   total: number; active: number; verified: number;
   pending: number; suspended: number; rejected: number;
 }
-interface OrderSummary {
-  total: number; pending: number; confirmed: number; processing: number;
-  delivered: number; cancelled: number; unpaid: number; totalValue: number;
+interface OrdersMeta {
+  page: number; limit: number; total: number; totalPages: number;
 }
 interface WalletSummary {
   totalWallets: number; totalBalance: number;
@@ -52,8 +51,8 @@ interface CustomerState {
   isLoadingDashboard:  boolean;
 
   // Orders
-  orders:        CustomerOrder[];
-  orderSummary:  OrderSummary;
+  orders:          CustomerOrder[];
+  ordersMeta:      OrdersMeta;
   isLoadingOrders: boolean;
 
   // Wallets
@@ -80,7 +79,7 @@ interface CustomerState {
 }
 
 const defaultCustomerSummary: CustomerSummary = { total: 0, active: 0, verified: 0, pending: 0, suspended: 0, rejected: 0 };
-const defaultOrderSummary: OrderSummary = { total: 0, pending: 0, confirmed: 0, processing: 0, delivered: 0, cancelled: 0, unpaid: 0, totalValue: 0 };
+const defaultOrdersMeta: OrdersMeta = { page: 1, limit: 20, total: 0, totalPages: 0 };
 const defaultWalletSummary: WalletSummary = { totalWallets: 0, totalBalance: 0, totalDeposited: 0, totalWithdrawn: 0, frozen: 0 };
 const defaultReviewSummary: ReviewSummary = { total: 0, approved: 0, pending: 0, flagged: 0, rejected: 0, avgRating: 0 };
 const defaultChatSummary: ChatSummary = { open: 0, pending: 0, resolved: 0, escalated: 0 };
@@ -97,7 +96,7 @@ export const CustomerStore = signalStore(
     isLoadingDashboard: false,
 
     orders:          [],
-    orderSummary:    defaultOrderSummary,
+    ordersMeta:      defaultOrdersMeta,
     isLoadingOrders: false,
 
     wallets:          [],
@@ -223,10 +222,13 @@ export const CustomerStore = signalStore(
         switchMap(params =>
           svc.listOrders(params).pipe(
             timeout(20000),
-            tap(res => patchState(store, {
-              orders:       res.data ?? [],
-              orderSummary: res.summary ?? defaultOrderSummary,
-            })),
+            tap(res => {
+              console.log('[customers/orders] response:', res);
+              patchState(store, {
+                orders:     res.data ?? [],
+                ordersMeta: res.meta ?? defaultOrdersMeta,
+              });
+            }),
             catchError(() => EMPTY),
             finalize(() => patchState(store, { isLoadingOrders: false }))
           )
@@ -264,19 +266,6 @@ export const CustomerStore = signalStore(
       });
     },
 
-    dispatchDriver(orderId: string, payload: DispatchDriverPayload, callbacks: Callbacks): void {
-      svc.dispatchDriver(orderId, payload).subscribe({
-        next: () => callbacks.onSuccess(),
-        error: (e: HttpErr) => callbacks.onError(errMsg(e, 'Dispatch failed')),
-      });
-    },
-
-    updateDispatchStatus(dispatchId: string, status: string, callbacks: Callbacks): void {
-      svc.updateDispatchStatus(dispatchId, status).subscribe({
-        next: () => callbacks.onSuccess(),
-        error: (e: HttpErr) => callbacks.onError(errMsg(e, 'Status update failed')),
-      });
-    },
 
     // ── Wallets ────────────────────────────────────────────────────────
 

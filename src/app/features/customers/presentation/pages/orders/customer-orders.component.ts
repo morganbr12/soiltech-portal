@@ -27,7 +27,7 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
         title="Customer Orders"
         subtitle="Manage and track all buyer orders across the supply chain"
         icon="shopping_bag"
-        [badge]="store.orderSummary().total"
+        [badge]="store.ordersMeta().total"
         [breadcrumbs]="[{ label: 'Home', url: '/dashboard' }, { label: 'Customers', url: '/customers' }, { label: 'Orders' }]"
       >
         <button class="btn btn-secondary btn-sm">
@@ -65,9 +65,9 @@ type OrderRow = CustomerOrder & Record<string, unknown>;
         <div class="filter-right">
           <select class="filter-select" [(ngModel)]="payFilter" (change)="doFilter()">
             <option value="">All Payments</option>
-            <option value="unpaid">Unpaid</option>
-            <option value="partial">Partial</option>
-            <option value="paid">Paid</option>
+            <option value="UNPAID">Unpaid</option>
+            <option value="PARTIAL">Partial</option>
+            <option value="PAID">Paid</option>
           </select>
           <select class="filter-select" [(ngModel)]="regionFilter" (change)="doFilter()">
             <option value="">All Regions</option>
@@ -119,30 +119,30 @@ export class CustomerOrdersComponent implements OnInit {
   );
 
   readonly stats = computed(() => {
-    const s = this.store.orderSummary();
+    const orders = this.store.orders();
+    const count  = (s: string) => orders.filter(o => o.status === s).length;
+    const unpaid = orders.filter(o => o.paymentStatus === 'UNPAID').length;
+    const totalValue = orders.reduce((sum, o) => sum + o.totalAmount, 0);
     return [
-      { label: 'Total Orders', value: s.total,                   icon: 'shopping_bag',   color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
-      { label: 'Delivered',    value: s.delivered,               icon: 'local_shipping', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
-      { label: 'In Progress',  value: s.processing + s.confirmed, icon: 'autorenew',      color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
-      { label: 'Pending',      value: s.pending,                  icon: 'pending',         color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
-      { label: 'Unpaid',       value: s.unpaid,                   icon: 'money_off',       color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
-      { label: 'Total Value',  value: 'GHS ' + (s.totalValue / 1000).toFixed(0) + 'K', icon: 'payments', color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
+      { label: 'Total Orders', value: orders.length,                                  icon: 'shopping_bag',   color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
+      { label: 'Delivered',    value: count(OrderStatus.DELIVERED),                   icon: 'local_shipping', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
+      { label: 'In Progress',  value: count(OrderStatus.PROCESSING) + count(OrderStatus.CONFIRMED), icon: 'autorenew', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
+      { label: 'Pending',      value: count(OrderStatus.PENDING),                     icon: 'pending',        color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
+      { label: 'Unpaid',       value: unpaid,                                         icon: 'money_off',      color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
+      { label: 'Total Value',  value: 'GHS ' + (totalValue / 1000).toFixed(0) + 'K', icon: 'payments',       color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
     ];
   });
 
   readonly statusTabs = computed(() => {
     const orders = this.store.orders();
     const count  = (s: string) => orders.filter(o => o.status === s).length;
-    const s      = this.store.orderSummary();
     return [
-      { label: 'All',            value: 'all',                          count: s.total },
-      { label: 'Pending',        value: OrderStatus.PENDING,            count: count(OrderStatus.PENDING) },
-      { label: 'Confirmed',      value: OrderStatus.CONFIRMED,          count: count(OrderStatus.CONFIRMED) },
-      { label: 'Agent Confirmed',value: OrderStatus.AGENT_CONFIRMED,    count: count(OrderStatus.AGENT_CONFIRMED) },
-      { label: 'Dispatched',     value: OrderStatus.DRIVER_DISPATCHED,  count: count(OrderStatus.DRIVER_DISPATCHED) },
-      { label: 'Shipped',        value: OrderStatus.SHIPPED,            count: count(OrderStatus.SHIPPED) },
-      { label: 'Delivered',      value: OrderStatus.DELIVERED,          count: count(OrderStatus.DELIVERED) },
-      { label: 'Cancelled',      value: OrderStatus.CANCELLED,          count: count(OrderStatus.CANCELLED) },
+      { label: 'All',        value: 'all',                  count: orders.length },
+      { label: 'Pending',    value: OrderStatus.PENDING,    count: count(OrderStatus.PENDING) },
+      { label: 'Confirmed',  value: OrderStatus.CONFIRMED,  count: count(OrderStatus.CONFIRMED) },
+      { label: 'Processing', value: OrderStatus.PROCESSING, count: count(OrderStatus.PROCESSING) },
+      { label: 'Delivered',  value: OrderStatus.DELIVERED,  count: count(OrderStatus.DELIVERED) },
+      { label: 'Cancelled',  value: OrderStatus.CANCELLED,  count: count(OrderStatus.CANCELLED) },
     ];
   });
 
@@ -155,10 +155,9 @@ export class CustomerOrdersComponent implements OnInit {
   });
 
   readonly columns: Column<OrderRow>[] = [
-    { key: 'orderCode', label: 'Order ID', width: '130px', sortable: true,
-      format: (v, row) => (v as string) || (row['id'] as string) },
     { key: 'customerName', label: 'Customer', sortable: true },
-    { key: 'produce',      label: 'Produce',  sortable: true },
+    { key: 'produce',      label: 'Produce',  sortable: true,
+      format: (v) => String(v).charAt(0).toUpperCase() + String(v).slice(1).toLowerCase() },
     { key: 'quantityKg',   label: 'Qty (kg)', type: 'number', align: 'right', sortable: true },
     { key: 'pricePerKg',   label: 'Price/kg', align: 'right',
       format: (v) => `GHS ${Number(v).toFixed(2)}` },
@@ -167,21 +166,18 @@ export class CustomerOrdersComponent implements OnInit {
     { key: 'region',        label: 'Region', sortable: true },
     { key: 'paymentStatus', label: 'Payment', type: 'status',
       statusMap: {
-        unpaid:  { label: 'Unpaid',  class: 'badge--error' },
-        partial: { label: 'Partial', class: 'badge--warning' },
-        paid:    { label: 'Paid',    class: 'badge--success' },
+        UNPAID:  { label: 'Unpaid',  class: 'badge--error' },
+        PARTIAL: { label: 'Partial', class: 'badge--warning' },
+        PAID:    { label: 'Paid',    class: 'badge--success' },
       }
     },
     { key: 'status', label: 'Status', type: 'status',
       statusMap: {
-        [OrderStatus.PENDING]:           { label: 'Pending',         class: 'badge--warning' },
-        [OrderStatus.CONFIRMED]:         { label: 'Confirmed',       class: 'badge--info' },
-        [OrderStatus.PROCESSING]:        { label: 'Processing',      class: 'badge--info' },
-        [OrderStatus.AGENT_CONFIRMED]:   { label: 'Agent Confirmed', class: 'badge--purple' },
-        [OrderStatus.DRIVER_DISPATCHED]: { label: 'Dispatched',      class: 'badge--info' },
-        [OrderStatus.SHIPPED]:           { label: 'Shipped',         class: 'badge--info' },
-        [OrderStatus.DELIVERED]:         { label: 'Delivered',       class: 'badge--success' },
-        [OrderStatus.CANCELLED]:         { label: 'Cancelled',       class: 'badge--error' },
+        [OrderStatus.PENDING]:    { label: 'Pending',    class: 'badge--warning' },
+        [OrderStatus.CONFIRMED]:  { label: 'Confirmed',  class: 'badge--info' },
+        [OrderStatus.PROCESSING]: { label: 'Processing', class: 'badge--info' },
+        [OrderStatus.DELIVERED]:  { label: 'Delivered',  class: 'badge--success' },
+        [OrderStatus.CANCELLED]:  { label: 'Cancelled',  class: 'badge--error' },
       }
     },
     { key: 'orderDate', label: 'Date', type: 'date', sortable: true },
@@ -199,9 +195,7 @@ export class CustomerOrdersComponent implements OnInit {
     },
     {
       label: 'Cancel', icon: 'cancel', color: '#dc2626',
-      condition: (r) => r.status === OrderStatus.PENDING
-                     || r.status === OrderStatus.CONFIRMED
-                     || r.status === OrderStatus.AGENT_CONFIRMED,
+      condition: (r) => r.status === OrderStatus.PENDING || r.status === OrderStatus.CONFIRMED,
       handler: (r) => this.store.cancelOrder(r.id, '', {
         onSuccess: () => this.store.loadOrders({}),
         onError:   (e) => console.error(e),

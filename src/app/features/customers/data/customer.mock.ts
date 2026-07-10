@@ -81,21 +81,54 @@ export const MOCK_CUSTOMER_ORDERS: any[] = Array.from({ length: 120 }, (_, i) =>
     OrderStatus.PROCESSING, OrderStatus.CONFIRMED,
     OrderStatus.PENDING, OrderStatus.CANCELLED,
   ];
+  const farmerPool = [
+    { farmerCode: 'FRM-0001', fullName: 'Yaw Darko',     phone: '+233241234567', email: 'yaw@farm.gh',    region: 'Brong-Ahafo', district: 'Sunyani',  community: 'Fiapre',   cropTypes: ['Maize', 'Pepper'] },
+    { farmerCode: 'FRM-0002', fullName: 'Akosua Mensah',  phone: '+233244567890', email: 'akosua@farm.gh', region: 'Ashanti',     district: 'Kumasi',   community: 'Atonsu',   cropTypes: ['Tomato', 'Onion'] },
+    { farmerCode: 'FRM-0003', fullName: 'Kofi Atta',      phone: '+233247891234', email: 'kofi@farm.gh',   region: 'Eastern',     district: 'Koforidua',community: 'Nsawam',   cropTypes: ['Cassava', 'Yam'] },
+    { farmerCode: 'FRM-0004', fullName: 'Abena Asante',   phone: '+233250123456', email: 'abena@farm.gh',  region: 'Central',     district: 'Cape Coast',community: 'Elmina',   cropTypes: ['Maize'] },
+    { farmerCode: 'FRM-0005', fullName: 'Kweku Boateng',  phone: '+233253456789', email: 'kweku@farm.gh',  region: 'Northern',    district: 'Tamale',   community: 'Sagnarigu',cropTypes: ['Sorghum', 'Millet'] },
+  ];
+  const agentPool = [
+    { agentCode: 'AGT-0001', fullName: 'Kofi Mensah',  phone: '+233201234567', email: 'kofi@soiltech.com',  region: 'Brong-Ahafo', district: 'Sunyani' },
+    { agentCode: 'AGT-0002', fullName: 'Ama Owusu',    phone: '+233209876543', email: 'ama@soiltech.com',   region: 'Ashanti',     district: 'Kumasi' },
+    { agentCode: 'AGT-0003', fullName: 'Kwame Boadu',  phone: '+233205556789', email: 'kwame@soiltech.com', region: 'Eastern',     district: 'Koforidua' },
+    { agentCode: 'AGT-0004', fullName: 'Efua Amoah',   phone: '+233202223344', email: 'efua@soiltech.com',  region: 'Central',     district: 'Cape Coast' },
+  ];
+  const custCode = `CUST-${String((i % 80) + 1).padStart(4, '0')}`;
+  const orderStatus = statusPool[i % statusPool.length];
   return {
     id: `ORD-${String(i + 1).padStart(4, '0')}`,
+    orderCode: `ORD-${String(i + 1).padStart(5, '0')}`,
     customerId: cust.id,
+    customerCode: custCode,
     customerName: `${cust.firstName} ${cust.lastName}`,
     produce: rnd(PRODUCE_LIST),
     quantityKg: qty,
     pricePerKg: price,
     totalAmount: parseFloat((qty * price).toFixed(2)),
-    status: statusPool[i % statusPool.length],
-    paymentStatus: i % 4 === 0 ? 'unpaid' : i % 4 === 1 ? 'partial' : 'paid',
-    assignedAgent: `AGT-${String(rndNum(1, 60)).padStart(3, '0')}`,
-    assignedDriver: `DRV-${String(rndNum(1, 30)).padStart(3, '0')}`,
+    status: orderStatus,
+    paymentStatus: i % 4 === 0 ? 'UNPAID' : i % 4 === 1 ? 'PARTIAL' : 'PAID',
+    assignedDriver: i % 5 !== 0 ? `${rnd(['Ebo', 'Kojo', 'Yaw', 'Musa', 'Seidu'])} ${rnd(['Asante', 'Mensah', 'Owusu', 'Boateng'])}` : null,
     orderDate: dateBack(rndNum(1, 180)),
-    deliveryDate: i % 7 !== 0 ? dateBack(rndNum(0, 30)) : undefined,
+    deliveryDate: i % 7 !== 0 ? dateBack(rndNum(0, 30)) : null,
     region: cust.region,
+    cancellationReason: orderStatus === OrderStatus.CANCELLED
+      ? rnd(['Price dispute', 'Customer request', 'Stock unavailable', 'Quality issue'])
+      : null,
+    createdAt: dateBack(rndNum(1, 180)),
+    updatedAt: dateBack(rndNum(0, 5)),
+    customer: {
+      id: cust.id,
+      fullName: `${cust.firstName} ${cust.lastName}`,
+      email: cust.email,
+      phone: cust.phone,
+      address: cust.address,
+      region: cust.region,
+      accountType: cust.accountType ?? 'INDIVIDUAL',
+      status: cust.status,
+    },
+    farmer: i % 8 !== 0 ? { id: `frm-${i}`, ...farmerPool[i % farmerPool.length] } : null,
+    agent:  i % 10 !== 0 ? { id: `agt-${i}`, ...agentPool[i % agentPool.length] } : null,
   };
 });
 

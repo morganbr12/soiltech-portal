@@ -14,14 +14,11 @@ export enum CustomerTier {
 }
 
 export enum OrderStatus {
-  PENDING           = 'pending',
-  CONFIRMED         = 'confirmed',
-  PROCESSING        = 'processing',
-  AGENT_CONFIRMED   = 'agentConfirmed',
-  DRIVER_DISPATCHED = 'driverDispatched',
-  SHIPPED           = 'shipped',
-  DELIVERED         = 'delivered',
-  CANCELLED         = 'cancelled',
+  PENDING    = 'PENDING',
+  CONFIRMED  = 'CONFIRMED',
+  PROCESSING = 'PROCESSING',
+  DELIVERED  = 'DELIVERED',
+  CANCELLED  = 'CANCELLED',
 }
 
 export enum DispatchStatus {
@@ -99,24 +96,59 @@ export interface Customer extends Record<string, unknown> {
   updatedAt: string;
 }
 
+export interface OrderCustomer {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  address: string;
+  region: string;
+  accountType: string;
+  status: string;
+}
+
+export interface OrderFarmer {
+  id: string;
+  farmerCode: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  region: string;
+  district: string;
+  community: string;
+  cropTypes: string[];
+}
+
+export interface OrderAgent {
+  id: string;
+  agentCode: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  region: string;
+  district: string;
+}
+
 export interface CustomerOrder extends Record<string, unknown> {
   id: string;
   orderCode?: string;
   customerId: string;
+  customerCode?: string;
   customerName: string;
+  customer?: OrderCustomer | null;
+  farmer?: OrderFarmer | null;
+  agent?: OrderAgent | null;
+  assignedDriver?: string | null;
   produce: string;
   quantityKg: number;
   pricePerKg: number;
   totalAmount: number;
   status: OrderStatus;
-  paymentStatus: 'unpaid' | 'partial' | 'paid';
-  assignedAgent?: string;
-  assignedDriver?: string;
-  dispatchId?: string;
-  vehiclePlate?: string;
+  paymentStatus: 'UNPAID' | 'PARTIAL' | 'PAID';
   orderDate: string;
-  deliveryDate?: string;
+  deliveryDate?: string | null;
   region: string;
+  cancellationReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -346,6 +378,13 @@ export interface ListMeta {
   hasPrevPage: boolean;
 }
 
+export interface OrderListMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface CustomerListResponse {
   success: boolean;
   statusCode: number;
@@ -364,20 +403,9 @@ export interface CustomerListResponse {
 
 export interface CustomerOrderListResponse {
   success: boolean;
-  statusCode: number;
   message: string | null;
   data: CustomerOrder[];
-  meta: ListMeta;
-  summary: {
-    total: number;
-    pending: number;
-    confirmed: number;
-    processing: number;
-    delivered: number;
-    cancelled: number;
-    unpaid: number;
-    totalValue: number;
-  };
+  meta: OrderListMeta;
 }
 
 export interface CustomerWalletListResponse {
