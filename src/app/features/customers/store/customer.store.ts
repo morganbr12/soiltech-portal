@@ -271,6 +271,16 @@ export const CustomerStore = signalStore(
       });
     },
 
+    assignDriver(orderId: string, vehicleId: string, callbacks: Callbacks): void {
+      svc.assignDriver(orderId, vehicleId).subscribe({
+        next: updated => {
+          patchState(store, { orders: store.orders().map(o => o.id === orderId ? { ...o, ...updated } : o) });
+          callbacks.onSuccess();
+        },
+        error: (e: HttpErr) => callbacks.onError(errMsg(e, 'Failed to assign rider')),
+      });
+    },
+
 
     // ── Wallets ────────────────────────────────────────────────────────
 

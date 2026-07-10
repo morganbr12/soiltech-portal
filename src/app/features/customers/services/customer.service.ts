@@ -130,6 +130,12 @@ export class CustomerService {
       .pipe(map(r => r.data));
   }
 
+  assignDriver(orderId: string, vehicleId: string): Observable<CustomerOrder> {
+    return this.http
+      .patch<ApiResponse<CustomerOrder>>(`${this.base}/orders/${orderId}/assign-driver`, { vehicleId })
+      .pipe(map(r => r.data));
+  }
+
   dispatchDriver(orderId: string, payload: DispatchDriverPayload): Observable<{ id: string; [key: string]: unknown }> {
     return this.http
       .post<ApiResponse<{ id: string; [key: string]: unknown }>>(`${this.base}/orders/${orderId}/dispatch-driver`, payload)

@@ -2,6 +2,8 @@ import { Component, inject, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CustomerStore } from '../../../store/customer.store';
 import { CustomerOrder, OrderStatus } from '../../../domain/customer.model';
+import { VehicleService } from '../../../../logistics/services/vehicle.service';
+import { Vehicle, VehicleStatusApi } from '../../../../logistics/domain/vehicle.model';
 
 @Component({
   selector: 'app-view-order-drawer',
@@ -122,6 +124,72 @@ import { CustomerOrder, OrderStatus } from '../../../domain/customer.model';
             </div>
           </div>
 
+          <!-- Driver -->
+          <div class="section">
+            <div class="section-title-row">
+              <span class="section-title">Driver</span>
+              @if (!showAssignRider()) {
+                <button class="assign-btn" (click)="openAssignRider()">
+                  <span class="material-symbols-rounded">add</span>
+                  {{ order().assignedDriver ? 'Reassign' : 'Assign Rider' }}
+                </button>
+              }
+            </div>
+
+            @if (!showAssignRider()) {
+              @if (order().assignedDriver) {
+                <div class="party-card">
+                  <div class="party-avatar" style="background:rgba(124,58,237,0.12);color:#7c3aed">
+                    {{ order().assignedDriver!.charAt(0).toUpperCase() }}
+                  </div>
+                  <div class="party-info">
+                    <span class="party-name">{{ order().assignedDriver }}</span>
+                    <span class="party-code">Assigned Rider</span>
+                  </div>
+                </div>
+              } @else {
+                <p class="no-party">No rider assigned yet.</p>
+              }
+            } @else {
+              <!-- Inline rider picker -->
+              @if (vehiclesLoading()) {
+                <div class="rider-loading">
+                  <span class="material-symbols-rounded spinning">progress_activity</span> Loading available riders…
+                </div>
+              } @else if (availableVehicles().length === 0) {
+                <div class="rider-empty">No available vehicles at the moment.</div>
+              } @else {
+                <div class="rider-list">
+                  @for (v of availableVehicles(); track v.id) {
+                    <div class="rider-item" [class.selected]="selectedVehicleId() === v.id" (click)="selectedVehicleId.set(v.id)">
+                      <div class="rider-radio">
+                        <span class="material-symbols-rounded">
+                          {{ selectedVehicleId() === v.id ? 'radio_button_checked' : 'radio_button_unchecked' }}
+                        </span>
+                      </div>
+                      <div class="rider-detail">
+                        <span class="rider-name">{{ v.driverName || 'No driver' }} · {{ v.carPlateNumber }}</span>
+                        <span class="rider-meta">{{ v.vehicleType }} · {{ v.region }}</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+              <div class="assign-actions">
+                <button class="btn btn-ghost btn-sm" (click)="closeAssignRider()">Cancel</button>
+                <button class="btn btn-primary btn-sm"
+                  [disabled]="!selectedVehicleId() || saving()"
+                  (click)="submitAssignRider()">
+                  @if (saving()) {
+                    <span class="material-symbols-rounded spinning">progress_activity</span> Assigning…
+                  } @else {
+                    <span class="material-symbols-rounded">check</span> Confirm
+                  }
+                </button>
+              </div>
+            }
+          </div>
+
           <!-- Agent -->
           <div class="section">
             <div class="section-title">Agent</div>
@@ -200,17 +268,6 @@ import { CustomerOrder, OrderStatus } from '../../../domain/customer.model';
             } @else {
               <p class="no-party">No farmer linked — order predates farmer tracking.</p>
             }
-          </div>
-
-          <!-- Driver -->
-          <div class="section">
-            <div class="section-title">Driver</div>
-            <div class="detail-grid">
-              <div class="detail-item full-width">
-                <span class="detail-label">Assigned Driver</span>
-                <span class="detail-value">{{ order().assignedDriver || '—' }}</span>
-              </div>
-            </div>
           </div>
 
           @if (order().cancellationReason) {
@@ -362,12 +419,45 @@ import { CustomerOrder, OrderStatus } from '../../../domain/customer.model';
     }
 
     .section { display: flex; flex-direction: column; gap: 10px; }
+    .section-title-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 6px; border-bottom: 1px solid var(--color-border-light);
+    }
     .section-title {
       font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
       letter-spacing: 0.06em; color: var(--color-text-muted);
-      padding-bottom: 6px;
-      border-bottom: 1px solid var(--color-border-light);
+      padding-bottom: 6px; border-bottom: 1px solid var(--color-border-light);
     }
+    .section-title-row .section-title { border-bottom: none; padding-bottom: 0; }
+    .assign-btn {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 3px 10px; border-radius: 6px; border: 1px solid var(--color-primary);
+      background: transparent; color: var(--color-primary);
+      font-size: 0.75rem; font-weight: 600; cursor: pointer; font-family: inherit;
+      span { font-size: 14px; }
+      &:hover { background: rgba(26,122,74,0.06); }
+    }
+    .rider-loading {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.8125rem; color: var(--color-text-muted); padding: 8px 0;
+      span { font-size: 18px; color: var(--color-primary); }
+    }
+    .rider-empty { font-size: 0.8125rem; color: var(--color-text-muted); font-style: italic; padding: 4px 0; }
+    .rider-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .rider-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--color-border-light); background: var(--color-bg-subtle);
+      transition: border-color 0.15s, background 0.15s;
+      &:hover { border-color: var(--color-primary); background: rgba(26,122,74,0.04); }
+      &.selected { border-color: var(--color-primary); background: rgba(26,122,74,0.06); }
+    }
+    .rider-radio span { font-size: 20px; color: var(--color-text-muted); font-variation-settings: 'FILL' 1; }
+    .rider-item.selected .rider-radio span { color: var(--color-primary); }
+    .rider-detail { display: flex; flex-direction: column; gap: 2px; }
+    .rider-name { font-size: 0.875rem; font-weight: 600; color: var(--color-text-primary); }
+    .rider-meta { font-size: 0.75rem; color: var(--color-text-muted); }
+    .assign-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .detail-item { display: flex; flex-direction: column; gap: 2px; }
     .detail-item.full-width { grid-column: 1 / -1; }
@@ -412,6 +502,7 @@ import { CustomerOrder, OrderStatus } from '../../../domain/customer.model';
       border: 1px solid var(--color-border-light);
       &:last-child { margin-left: auto; }
     }
+    .btn-sm { padding: 6px 12px; font-size: 0.8125rem; }
 
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinning { animation: spin 0.8s linear infinite; }
@@ -419,15 +510,45 @@ import { CustomerOrder, OrderStatus } from '../../../domain/customer.model';
 })
 export class ViewOrderDrawerComponent {
   private readonly customerStore = inject(CustomerStore);
+  private readonly vehicleSvc    = inject(VehicleService);
 
   readonly order = input.required<CustomerOrder>();
 
   readonly closed       = output<void>();
   readonly orderUpdated = output<void>();
 
-  readonly saving = signal(false);
+  readonly saving            = signal(false);
+  readonly showAssignRider   = signal(false);
+  readonly availableVehicles = signal<Vehicle[]>([]);
+  readonly vehiclesLoading   = signal(false);
+  readonly selectedVehicleId = signal<string>('');
 
   protected readonly OrderStatus = OrderStatus;
+
+  openAssignRider(): void {
+    this.showAssignRider.set(true);
+    this.selectedVehicleId.set('');
+    this.vehiclesLoading.set(true);
+    this.vehicleSvc.list({ status: VehicleStatusApi.AVAILABLE, limit: 50 }).subscribe({
+      next: res => { this.availableVehicles.set(res.data); this.vehiclesLoading.set(false); },
+      error: ()  =>   this.vehiclesLoading.set(false),
+    });
+  }
+
+  closeAssignRider(): void {
+    this.showAssignRider.set(false);
+    this.selectedVehicleId.set('');
+  }
+
+  submitAssignRider(): void {
+    const vehicleId = this.selectedVehicleId();
+    if (!vehicleId) return;
+    this.saving.set(true);
+    this.customerStore.assignDriver(this.order().id, vehicleId, {
+      onSuccess: () => { this.saving.set(false); this.closeAssignRider(); this.orderUpdated.emit(); },
+      onError:   () =>   this.saving.set(false),
+    });
+  }
 
   confirmOrder(): void {
     this.saving.set(true);
