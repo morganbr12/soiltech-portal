@@ -224,8 +224,13 @@ export const CustomerStore = signalStore(
             timeout(20000),
             tap(res => {
               console.log('[customers/orders] response:', res);
+              const orders = (res.data ?? []).map(o => ({
+                ...o,
+                status:        o.status.toUpperCase()        as CustomerOrder['status'],
+                paymentStatus: o.paymentStatus.toUpperCase() as CustomerOrder['paymentStatus'],
+              }));
               patchState(store, {
-                orders:     res.data ?? [],
+                orders,
                 ordersMeta: res.meta ?? defaultOrdersMeta,
               });
             }),
