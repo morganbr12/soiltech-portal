@@ -14,11 +14,13 @@ export enum CustomerTier {
 }
 
 export enum OrderStatus {
-  PENDING    = 'PENDING',
-  CONFIRMED  = 'CONFIRMED',
-  PROCESSING = 'PROCESSING',
-  DELIVERED  = 'DELIVERED',
-  CANCELLED  = 'CANCELLED',
+  PENDING           = 'PENDING',
+  CONFIRMED         = 'CONFIRMED',
+  AGENT_CONFIRMED   = 'AGENT_CONFIRMED',   // legacy: kept for backward compat
+  DRIVER_DISPATCHED = 'DRIVER_DISPATCHED',
+  SHIPPED           = 'SHIPPED',
+  DELIVERED         = 'DELIVERED',
+  CANCELLED         = 'CANCELLED',
 }
 
 export enum DispatchStatus {

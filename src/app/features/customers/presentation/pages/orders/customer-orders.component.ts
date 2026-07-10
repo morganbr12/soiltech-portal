@@ -126,7 +126,7 @@ export class CustomerOrdersComponent implements OnInit {
     return [
       { label: 'Total Orders', value: orders.length,                                  icon: 'shopping_bag',   color: '#1a7a4a', bg: 'rgba(26,122,74,0.1)' },
       { label: 'Delivered',    value: count(OrderStatus.DELIVERED),                   icon: 'local_shipping', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
-      { label: 'In Progress',  value: count(OrderStatus.PROCESSING) + count(OrderStatus.CONFIRMED), icon: 'autorenew', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
+      { label: 'In Progress',  value: count(OrderStatus.CONFIRMED) + count(OrderStatus.DRIVER_DISPATCHED) + count(OrderStatus.SHIPPED), icon: 'autorenew', color: '#0284c7', bg: 'rgba(2,132,199,0.1)' },
       { label: 'Pending',      value: count(OrderStatus.PENDING),                     icon: 'pending',        color: '#d97706', bg: 'rgba(217,119,6,0.1)' },
       { label: 'Unpaid',       value: unpaid,                                         icon: 'money_off',      color: '#dc2626', bg: 'rgba(220,38,38,0.1)' },
       { label: 'Total Value',  value: 'GHS ' + (totalValue / 1000).toFixed(0) + 'K', icon: 'payments',       color: '#7c3aed', bg: 'rgba(124,58,237,0.1)' },
@@ -137,12 +137,13 @@ export class CustomerOrdersComponent implements OnInit {
     const orders = this.store.orders();
     const count  = (s: string) => orders.filter(o => o.status === s).length;
     return [
-      { label: 'All',        value: 'all',                  count: orders.length },
-      { label: 'Pending',    value: OrderStatus.PENDING,    count: count(OrderStatus.PENDING) },
-      { label: 'Confirmed',  value: OrderStatus.CONFIRMED,  count: count(OrderStatus.CONFIRMED) },
-      { label: 'Processing', value: OrderStatus.PROCESSING, count: count(OrderStatus.PROCESSING) },
-      { label: 'Delivered',  value: OrderStatus.DELIVERED,  count: count(OrderStatus.DELIVERED) },
-      { label: 'Cancelled',  value: OrderStatus.CANCELLED,  count: count(OrderStatus.CANCELLED) },
+      { label: 'All',               value: 'all',                          count: orders.length },
+      { label: 'Pending',           value: OrderStatus.PENDING,            count: count(OrderStatus.PENDING) },
+      { label: 'Confirmed',         value: OrderStatus.CONFIRMED,          count: count(OrderStatus.CONFIRMED) },
+      { label: 'Dispatched',        value: OrderStatus.DRIVER_DISPATCHED,  count: count(OrderStatus.DRIVER_DISPATCHED) },
+      { label: 'Shipped',           value: OrderStatus.SHIPPED,            count: count(OrderStatus.SHIPPED) },
+      { label: 'Delivered',         value: OrderStatus.DELIVERED,          count: count(OrderStatus.DELIVERED) },
+      { label: 'Cancelled',         value: OrderStatus.CANCELLED,          count: count(OrderStatus.CANCELLED) },
     ];
   });
 
@@ -173,11 +174,13 @@ export class CustomerOrdersComponent implements OnInit {
     },
     { key: 'status', label: 'Status', type: 'status',
       statusMap: {
-        [OrderStatus.PENDING]:    { label: 'Pending',    class: 'badge--warning' },
-        [OrderStatus.CONFIRMED]:  { label: 'Confirmed',  class: 'badge--info' },
-        [OrderStatus.PROCESSING]: { label: 'Processing', class: 'badge--info' },
-        [OrderStatus.DELIVERED]:  { label: 'Delivered',  class: 'badge--success' },
-        [OrderStatus.CANCELLED]:  { label: 'Cancelled',  class: 'badge--error' },
+        [OrderStatus.PENDING]:           { label: 'Pending',           class: 'badge--warning' },
+        [OrderStatus.CONFIRMED]:         { label: 'Confirmed',         class: 'badge--info' },
+        [OrderStatus.AGENT_CONFIRMED]:   { label: 'Agent Confirmed',   class: 'badge--purple' },
+        [OrderStatus.DRIVER_DISPATCHED]: { label: 'Dispatched',        class: 'badge--purple' },
+        [OrderStatus.SHIPPED]:           { label: 'Shipped',           class: 'badge--info' },
+        [OrderStatus.DELIVERED]:         { label: 'Delivered',         class: 'badge--success' },
+        [OrderStatus.CANCELLED]:         { label: 'Cancelled',         class: 'badge--error' },
       }
     },
     { key: 'orderDate', label: 'Date', type: 'date', sortable: true },
@@ -192,6 +195,11 @@ export class CustomerOrdersComponent implements OnInit {
         onSuccess: () => this.store.loadOrders({}),
         onError:   (e) => console.error(e),
       }),
+    },
+    {
+      label: 'Dispatch Driver', icon: 'local_shipping', color: '#7c3aed',
+      condition: (r) => r.status === OrderStatus.CONFIRMED || r.status === OrderStatus.AGENT_CONFIRMED,
+      handler: (r) => this.selectedOrder.set(r),
     },
     {
       label: 'Cancel', icon: 'cancel', color: '#dc2626',

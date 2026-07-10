@@ -78,7 +78,7 @@ export const MOCK_CUSTOMER_ORDERS: any[] = Array.from({ length: 120 }, (_, i) =>
   const price = rndFloat(1.5, 8.0);
   const statusPool: OrderStatus[] = [
     OrderStatus.DELIVERED, OrderStatus.DELIVERED, OrderStatus.DELIVERED,
-    OrderStatus.PROCESSING, OrderStatus.CONFIRMED,
+    OrderStatus.DRIVER_DISPATCHED, OrderStatus.CONFIRMED,
     OrderStatus.PENDING, OrderStatus.CANCELLED,
   ];
   const farmerPool = [

@@ -32,5 +32,6 @@ export const API_ENDPOINTS = {
   SETTINGS: `${API_BASE}/settings`,
   DASHBOARD: `${API_BASE}/dashboard`,
   CUSTOMERS: `${API_BASE}/customers`,
+  ORDERS: `${API_BASE}/orders`,
   DISPATCHES: `${API_BASE}/dispatches`,
 } as const;

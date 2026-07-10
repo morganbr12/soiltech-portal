@@ -5,7 +5,7 @@ import { pipe, switchMap, tap, catchError, finalize, timeout, EMPTY } from 'rxjs
 import { CustomerService } from '../services/customer.service';
 import {
   Customer, CustomerStatus,
-  CustomerOrder, OrderStatus,
+  CustomerOrder, OrderStatus, DispatchDriverPayload,
   CustomerWallet, WalletStatus,
   CustomerReview, ReviewStatus,
   CustomerChat, ChatStatus,
@@ -271,13 +271,17 @@ export const CustomerStore = signalStore(
       });
     },
 
-    assignDriver(orderId: string, vehicleId: string, callbacks: Callbacks): void {
-      svc.assignDriver(orderId, vehicleId).subscribe({
-        next: updated => {
-          patchState(store, { orders: store.orders().map(o => o.id === orderId ? { ...o, ...updated } : o) });
+    dispatchDriver(orderId: string, payload: DispatchDriverPayload, callbacks: Callbacks): void {
+      svc.dispatchDriver(orderId, payload).subscribe({
+        next: () => {
+          patchState(store, {
+            orders: store.orders().map(o =>
+              o.id === orderId ? { ...o, status: OrderStatus.DRIVER_DISPATCHED } : o
+            ),
+          });
           callbacks.onSuccess();
         },
-        error: (e: HttpErr) => callbacks.onError(errMsg(e, 'Failed to assign rider')),
+        error: (e: HttpErr) => callbacks.onError(errMsg(e, 'Failed to dispatch driver')),
       });
     },
 

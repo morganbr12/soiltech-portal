@@ -1,5 +1,6 @@
 import { Component, inject, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { CustomerStore } from '../../../store/customer.store';
 import { CustomerOrder, OrderStatus } from '../../../domain/customer.model';
 import { VehicleService } from '../../../../logistics/services/vehicle.service';
@@ -8,7 +9,7 @@ import { Vehicle, VehicleStatusApi } from '../../../../logistics/domain/vehicle.
 @Component({
   selector: 'app-view-order-drawer',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="backdrop" (click)="closed.emit()">
       <aside class="drawer" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="order-drawer-title">
@@ -124,19 +125,18 @@ import { Vehicle, VehicleStatusApi } from '../../../../logistics/domain/vehicle.
             </div>
           </div>
 
-          <!-- Driver -->
+          <!-- Driver / Dispatch -->
           <div class="section">
             <div class="section-title-row">
               <span class="section-title">Driver</span>
-              @if (!showAssignRider()) {
-                <button class="assign-btn" (click)="openAssignRider()">
-                  <span class="material-symbols-rounded">add</span>
-                  {{ order().assignedDriver ? 'Reassign' : 'Assign Rider' }}
+              @if (canDispatch() && !showDispatchForm()) {
+                <button class="assign-btn" (click)="openDispatchForm()">
+                  <span class="material-symbols-rounded">local_shipping</span> Dispatch Driver
                 </button>
               }
             </div>
 
-            @if (!showAssignRider()) {
+            @if (!showDispatchForm()) {
               @if (order().assignedDriver) {
                 <div class="party-card">
                   <div class="party-avatar" style="background:rgba(124,58,237,0.12);color:#7c3aed">
@@ -144,21 +144,30 @@ import { Vehicle, VehicleStatusApi } from '../../../../logistics/domain/vehicle.
                   </div>
                   <div class="party-info">
                     <span class="party-name">{{ order().assignedDriver }}</span>
-                    <span class="party-code">Assigned Rider</span>
+                    <span class="party-code">Dispatched Driver</span>
                   </div>
                 </div>
+              } @else if (canDispatch()) {
+                <p class="no-party">Order confirmed — ready to dispatch a driver.</p>
               } @else {
-                <p class="no-party">No rider assigned yet.</p>
+                <p class="no-party">No driver dispatched yet.</p>
               }
             } @else {
-              <!-- Inline rider picker -->
+              <!-- Dispatch form -->
+              <div class="dispatch-info">
+                <span class="material-symbols-rounded">info</span>
+                Dispatching sets the vehicle to ON_ROUTE and notifies the customer.
+              </div>
+
+              <!-- Vehicle picker -->
               @if (vehiclesLoading()) {
                 <div class="rider-loading">
-                  <span class="material-symbols-rounded spinning">progress_activity</span> Loading available riders…
+                  <span class="material-symbols-rounded spinning">progress_activity</span> Loading available vehicles…
                 </div>
               } @else if (availableVehicles().length === 0) {
                 <div class="rider-empty">No available vehicles at the moment.</div>
               } @else {
+                <div class="field-label">Select Vehicle *</div>
                 <div class="rider-list">
                   @for (v of availableVehicles(); track v.id) {
                     <div class="rider-item" [class.selected]="selectedVehicleId() === v.id" (click)="selectedVehicleId.set(v.id)">
@@ -175,15 +184,36 @@ import { Vehicle, VehicleStatusApi } from '../../../../logistics/domain/vehicle.
                   }
                 </div>
               }
+
+              <!-- Scheduled date -->
+              <div class="dispatch-field">
+                <label class="field-label">Scheduled Date *</label>
+                <input class="field-input" type="date" [(ngModel)]="scheduledDate" />
+              </div>
+
+              <!-- Pickup location -->
+              <div class="dispatch-field">
+                <label class="field-label">Pickup Location *</label>
+                <input class="field-input" type="text" placeholder="e.g. Farm Road, Kumasi"
+                  [(ngModel)]="pickupLocation" />
+              </div>
+
+              <!-- Notes -->
+              <div class="dispatch-field">
+                <label class="field-label">Notes <span style="font-weight:400;color:var(--color-text-muted)">(optional)</span></label>
+                <input class="field-input" type="text" placeholder="Any special instructions"
+                  [(ngModel)]="dispatchNotes" />
+              </div>
+
               <div class="assign-actions">
-                <button class="btn btn-ghost btn-sm" (click)="closeAssignRider()">Cancel</button>
+                <button class="btn btn-ghost btn-sm" (click)="closeDispatchForm()">Cancel</button>
                 <button class="btn btn-primary btn-sm"
-                  [disabled]="!selectedVehicleId() || saving()"
-                  (click)="submitAssignRider()">
+                  [disabled]="!selectedVehicleId() || !scheduledDate || !pickupLocation || saving()"
+                  (click)="submitDispatch()">
                   @if (saving()) {
-                    <span class="material-symbols-rounded spinning">progress_activity</span> Assigning…
+                    <span class="material-symbols-rounded spinning">progress_activity</span> Dispatching…
                   } @else {
-                    <span class="material-symbols-rounded">check</span> Confirm
+                    <span class="material-symbols-rounded">local_shipping</span> Dispatch
                   }
                 </button>
               </div>
@@ -312,6 +342,14 @@ import { Vehicle, VehicleStatusApi } from '../../../../logistics/domain/vehicle.
             @case (OrderStatus.CONFIRMED) {
               <button class="btn btn-danger" (click)="cancelOrder()" [disabled]="saving()">
                 <span class="material-symbols-rounded">cancel</span> Cancel Order
+              </button>
+              <button class="btn btn-info" (click)="openDispatchForm()" [disabled]="saving() || showDispatchForm()">
+                <span class="material-symbols-rounded">local_shipping</span> Dispatch Driver
+              </button>
+            }
+            @case (OrderStatus.AGENT_CONFIRMED) {
+              <button class="btn btn-info" (click)="openDispatchForm()" [disabled]="saving() || showDispatchForm()">
+                <span class="material-symbols-rounded">local_shipping</span> Dispatch Driver
               </button>
             }
           }
@@ -457,6 +495,22 @@ import { Vehicle, VehicleStatusApi } from '../../../../logistics/domain/vehicle.
     .rider-detail { display: flex; flex-direction: column; gap: 2px; }
     .rider-name { font-size: 0.875rem; font-weight: 600; color: var(--color-text-primary); }
     .rider-meta { font-size: 0.75rem; color: var(--color-text-muted); }
+    .dispatch-info {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 10px 14px; border-radius: 8px;
+      background: rgba(2,132,199,0.08); color: #0284c7;
+      font-size: 0.8125rem; font-weight: 500; line-height: 1.4;
+      span { font-size: 16px; font-variation-settings: 'FILL' 1; flex-shrink: 0; margin-top: 1px; }
+    }
+    .dispatch-field { display: flex; flex-direction: column; gap: 4px; }
+    .field-label { font-size: 0.75rem; font-weight: 600; color: var(--color-text-secondary); }
+    .field-input {
+      width: 100%; padding: 8px 10px; border-radius: 7px;
+      border: 1px solid var(--color-border); background: var(--color-surface);
+      color: var(--color-text-primary); font-size: 0.875rem; font-family: inherit;
+      box-sizing: border-box;
+      &:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(26,122,74,0.12); }
+    }
     .assign-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .detail-item { display: flex; flex-direction: column; gap: 2px; }
@@ -518,16 +572,28 @@ export class ViewOrderDrawerComponent {
   readonly orderUpdated = output<void>();
 
   readonly saving            = signal(false);
-  readonly showAssignRider   = signal(false);
+  readonly showDispatchForm  = signal(false);
   readonly availableVehicles = signal<Vehicle[]>([]);
   readonly vehiclesLoading   = signal(false);
   readonly selectedVehicleId = signal<string>('');
 
+  scheduledDate  = '';
+  pickupLocation = '';
+  dispatchNotes  = '';
+
   protected readonly OrderStatus = OrderStatus;
 
-  openAssignRider(): void {
-    this.showAssignRider.set(true);
+  canDispatch(): boolean {
+    const s = this.order().status;
+    return s === OrderStatus.CONFIRMED || s === OrderStatus.AGENT_CONFIRMED;
+  }
+
+  openDispatchForm(): void {
+    this.showDispatchForm.set(true);
     this.selectedVehicleId.set('');
+    this.scheduledDate  = '';
+    this.pickupLocation = '';
+    this.dispatchNotes  = '';
     this.vehiclesLoading.set(true);
     this.vehicleSvc.list({ status: VehicleStatusApi.AVAILABLE, limit: 50 }).subscribe({
       next: res => { this.availableVehicles.set(res.data); this.vehiclesLoading.set(false); },
@@ -535,19 +601,23 @@ export class ViewOrderDrawerComponent {
     });
   }
 
-  closeAssignRider(): void {
-    this.showAssignRider.set(false);
+  closeDispatchForm(): void {
+    this.showDispatchForm.set(false);
     this.selectedVehicleId.set('');
   }
 
-  submitAssignRider(): void {
+  submitDispatch(): void {
     const vehicleId = this.selectedVehicleId();
-    if (!vehicleId) return;
+    if (!vehicleId || !this.scheduledDate || !this.pickupLocation) return;
     this.saving.set(true);
-    this.customerStore.assignDriver(this.order().id, vehicleId, {
-      onSuccess: () => { this.saving.set(false); this.closeAssignRider(); this.orderUpdated.emit(); },
-      onError:   () =>   this.saving.set(false),
-    });
+    this.customerStore.dispatchDriver(
+      this.order().id,
+      { vehicleId, scheduledDate: this.scheduledDate, pickupLocation: this.pickupLocation, notes: this.dispatchNotes || undefined },
+      {
+        onSuccess: () => { this.saving.set(false); this.closeDispatchForm(); this.orderUpdated.emit(); },
+        onError:   () =>   this.saving.set(false),
+      },
+    );
   }
 
   confirmOrder(): void {
@@ -576,24 +646,27 @@ export class ViewOrderDrawerComponent {
 
   orderStatusLabel(status: string): string {
     const map: Record<string, string> = {
-      PENDING: 'Pending', CONFIRMED: 'Confirmed', PROCESSING: 'Processing',
-      DELIVERED: 'Delivered', CANCELLED: 'Cancelled',
+      PENDING: 'Pending', CONFIRMED: 'Confirmed',
+      AGENT_CONFIRMED: 'Agent Confirmed', DRIVER_DISPATCHED: 'Driver Dispatched',
+      SHIPPED: 'Shipped', DELIVERED: 'Delivered', CANCELLED: 'Cancelled',
     };
     return map[status] ?? status;
   }
 
   orderStatusIcon(status: string): string {
     const map: Record<string, string> = {
-      PENDING: 'schedule', CONFIRMED: 'verified', PROCESSING: 'autorenew',
-      DELIVERED: 'check_circle', CANCELLED: 'cancel',
+      PENDING: 'schedule', CONFIRMED: 'verified',
+      AGENT_CONFIRMED: 'agriculture', DRIVER_DISPATCHED: 'local_shipping',
+      SHIPPED: 'conveyor_belt', DELIVERED: 'check_circle', CANCELLED: 'cancel',
     };
     return map[status] ?? 'help';
   }
 
   orderStatusClass(status: string): string {
     const map: Record<string, string> = {
-      PENDING: 'badge--warning', CONFIRMED: 'badge--info', PROCESSING: 'badge--info',
-      DELIVERED: 'badge--success', CANCELLED: 'badge--error',
+      PENDING: 'badge--warning', CONFIRMED: 'badge--info',
+      AGENT_CONFIRMED: 'badge--purple', DRIVER_DISPATCHED: 'badge--purple',
+      SHIPPED: 'badge--info', DELIVERED: 'badge--success', CANCELLED: 'badge--error',
     };
     return map[status] ?? 'badge--neutral';
   }
